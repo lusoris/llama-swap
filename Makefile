@@ -1,4 +1,5 @@
 # Define variables for the application
+-include .config/praetor/engine.mk
 APP_NAME = llama-swap
 BUILD_DIR = build
 
@@ -149,3 +150,20 @@ eval-docs-agent:
 # Phony targets
 .PHONY: all clean ui mac windows simple-responder simple-responder-windows test test-all test-chart test-dev test-ui wol-proxy kubeswap eval-docs-agent release
 .PHONY: linux linux-arm64 linux-amd64
+
+# Praetor declared verification; existing project recipes remain unchanged.
+# Praetor ships one binary under two names; resolve whichever is installed.
+PRAETORCTL ?= $(shell command -v praetorctl 2>/dev/null || command -v standardsctl 2>/dev/null || echo praetorctl)
+.PHONY: verify-all
+verify-all:
+	@$(PRAETORCTL) compile-context --verify
+	@$(PRAETORCTL) caveman check --configured-sources
+	@$(PRAETORCTL) audit
+	@exec 'go' 'build' '-v' './...'
+	@exec 'go' 'test' '-v' '-race' './...'
+
+compile-context:
+	@$(PRAETORCTL) compile-context
+
+audit:
+	@$(PRAETORCTL) audit

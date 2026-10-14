@@ -1,0 +1,34 @@
+---
+id: "framework"
+name: "Core Framework & SDK Systems"
+description: "Foundational developer platforms, compilers, and universal SDK
+  libraries enforcing strict HISS invariants"
+runtime: "go"
+
+complexity:
+  max_cyclomatic: 10
+  max_cognitive: 15
+  max_func_loc: 75
+  max_statements: 50
+
+branch_protection:
+  enforce_linear_history: true
+  require_signed_commits: true
+  required_approving_reviewers: 1
+  dismiss_stale_reviews: true
+
+supply_chain:
+  slsa_level: 3
+  enforce_cosign: true
+  require_sbom: true
+
+linters:
+  - "govet"
+  - "golangci-lint"
+  - "semgrep"
+  - "gocyclo"
+  - "gocognit"
+
+devcontainer_features:
+  - "ghcr.io/devcontainers/features/go:1"
+  - "ghcr.io/devcontainers/features/common-utils:2"

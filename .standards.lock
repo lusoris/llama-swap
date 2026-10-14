@@ -1,0 +1,18 @@
+---
+version: 1
+pinned_version: v0.0.0+catalog.33773a292166
+digest: sha256:eba35dcd6070fe28dcf8636cf57b1d7126bbb65d7bc956ab72eac1afc71df36f
+profiles:
+  - id: framework
+    version: v0.0.0+catalog.33773a292166
+    digest:
+      sha256:625c316942f79c37e04e2e9ccac1ddd73cc6c5c4521f9327c3cf4250c3192aab
+facets:
+  - id: security:high
+    version: v0.0.0+catalog.33773a292166
+    digest:
+      sha256:9bd59f0725d472b1516ba74556feada0e3868f4642bc08dd2d67a2cc26e87778
+  - id: agent:sandboxed
+    version: v0.0.0+catalog.33773a292166
+    digest:
+      sha256:bc87486dea71e54d20549d6054dcf290d3d700e37b304cbdb6d6c1a2def895f2
