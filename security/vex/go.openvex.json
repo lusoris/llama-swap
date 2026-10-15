@@ -1,0 +1,18 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/lusoris/llama-swap/blob/main/security/vex/go.openvex.json",
+  "author": "llama-swap maintainers",
+  "timestamp": "2026-10-14T14:27:21Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "GO-2026-5932"
+      },
+      "last_updated": "2026-10-14T14:27:21Z",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "No package of golang.org/x/crypto/openpgp is built: go list -deps ./... names none. The module is required only for other x/crypto packages."
+    }
+  ]
+}

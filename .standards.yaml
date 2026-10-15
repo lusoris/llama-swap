@@ -1,0 +1,59 @@
+---
+version: 1
+repository:
+  owner: lusoris
+  name: llama-swap
+  visibility: ""
+  description: ""
+  homepage: ""
+  topics: []
+profiles:
+  - framework
+facets:
+  - security:high
+  - agent:sandboxed
+register:
+  sources:
+    expected: 13
+    sha256:
+      sha256:cd68bbc872f295d200abf1f89d007a503368df2b0b67847e24921b02262e3744
+    inputs:
+      - path: .paperclip/harness.json
+        surface: prompts
+        kind: message
+        format: json
+        selector: operating_contract.*
+      - path: .paperclip/harness.json
+        surface: prompts
+        kind: message
+        format: json
+        selector: invariants.*
+exceptions:
+  - rule: HISS-11
+    path: .github/workflows/release.yml
+    reason: adoption found the release workflows short of the declared supply chain (SLSA Build Level 3 declared, Level 0 measured; enforce_cosign without a cosign signing step; require_sbom without an SBOM step); raise them as docs/guides/releasing.md in Praetor describes, then remove this entry
+    expires: "2027-01-12"
+  - rule: declared-linters
+    tool: gitleaks
+    reason: adoption scaffolds no CI job for gitleaks declared by facet "security:high"; run it in a workflow, or remove this entry
+    expires: "2027-01-12"
+  - rule: declared-linters
+    tool: gocognit
+    reason: adoption scaffolds no CI job for gocognit declared by profile "framework"; run it in a workflow, or remove this entry
+    expires: "2027-01-12"
+  - rule: declared-linters
+    tool: gocyclo
+    reason: adoption scaffolds no CI job for gocyclo declared by profile "framework"; run it in a workflow, or remove this entry
+    expires: "2027-01-12"
+  - rule: declared-linters
+    tool: golangci-lint
+    reason: adoption scaffolds no CI job for golangci-lint declared by profile "framework"; run it in a workflow, or remove this entry
+    expires: "2027-01-12"
+  - rule: declared-linters
+    tool: semgrep
+    reason: adoption scaffolds no CI job for semgrep declared by profile "framework", facet "agent:sandboxed"; run it in a workflow, or remove this entry
+    expires: "2027-01-12"
+  - rule: declared-linters
+    tool: trivy
+    reason: adoption scaffolds no CI job for trivy declared by facet "security:high"; run it in a workflow, or remove this entry
+    expires: "2027-01-12"

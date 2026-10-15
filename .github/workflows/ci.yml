@@ -1,0 +1,83 @@
+---
+name: CI
+
+'on':
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: ['main']
+  merge_group:
+
+jobs:
+  test:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Stop on a draft pull request
+        if: github.event.pull_request.draft == true
+        shell: bash
+        env:
+          TITLE: Gate not run on a draft
+          MESSAGE: >-
+            The gate did not run because the pull request is a draft.
+            It runs when the pull request is marked ready for review.
+        run: |
+          echo "::error title=$TITLE::$MESSAGE"
+          echo "$MESSAGE" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+      - name: Checkout source
+        if: github.event.pull_request.draft != true
+        uses: actions/checkout@v7
+      - name: Setup Go
+        if: github.event.pull_request.draft != true
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: 'go.mod'
+          # Left to the two steps below. setup-go's own cache covers the module
+          # cache and the build cache under one key that carries no job name, so
+          # every job in the repository shares one entry: the first job to
+          # finish writes it, and every later job restores whatever that job
+          # happened to build. A job running `go test -race` then starts from
+          # objects compiled without the race detector and rebuilds them all.
+          cache: false
+
+      # A cache key joins the runner, the go.sum hash and, for the build cache,
+      # the commit, and runs past 80 columns, so yamllint's line-length rule is
+      # off for the two cache steps alone.
+      # yamllint disable rule:line-length
+      - name: Restore Go module cache
+        if: github.event.pull_request.draft != true
+        uses: actions/cache@v6
+        with:
+          path: ~/go/pkg/mod
+          key: gomod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            gomod-${{ runner.os }}-${{ runner.arch }}-
+
+      # The commit SHA in the key is deliberate. Without it the key is stable,
+      # the restore is an exact hit, and actions/cache skips the save -- so the
+      # entry freezes at the first build and no later run can improve it. With
+      # it every run misses, restores the newest prefix match, and saves what it
+      # actually built. `test` names this job's build cache; give every job in
+      # the repository a different name here.
+      - name: Restore Go build cache
+        if: github.event.pull_request.draft != true
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/go-build
+          key: gobuild-${{ runner.os }}-${{ runner.arch }}-test-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            gobuild-${{ runner.os }}-${{ runner.arch }}-test-${{ hashFiles('**/go.sum') }}-
+            gobuild-${{ runner.os }}-${{ runner.arch }}-test-
+      # yamllint enable rule:line-length
+
+      # Only the Go toolchain runs here. Praetor's gates (compile-context,
+      # audit, flavor audit) need praetorctl, which no step installs; the git
+      # hooks adoption writes run them.
+      - name: Vet
+        if: github.event.pull_request.draft != true
+        run: go vet ./...
+
+      - name: Test
+        if: github.event.pull_request.draft != true
+        run: go test -race ./...

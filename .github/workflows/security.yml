@@ -1,0 +1,53 @@
+---
+name: Security Scan
+
+'on':
+  schedule:
+    - cron: '0 4 * * *'
+  push:
+    branches: [main]
+
+jobs:
+  vulncheck:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: 'go.mod'
+          # See ci.yml: setup-go's cache key carries no job name, so every job
+          # in the repository would share one build cache entry.
+          cache: false
+
+      # A cache key joins the runner, the go.sum hash and, for the build cache,
+      # the commit, and runs past 80 columns, so yamllint's line-length rule is
+      # off for the two cache steps alone.
+      # yamllint disable rule:line-length
+      - name: Restore Go module cache
+        uses: actions/cache@v6
+        with:
+          path: ~/go/pkg/mod
+          key: gomod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            gomod-${{ runner.os }}-${{ runner.arch }}-
+
+      # `vulncheck` names this job's build cache and must differ from every
+      # other job's.
+      - name: Restore Go build cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/go-build
+          key: gobuild-${{ runner.os }}-${{ runner.arch }}-vulncheck-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            gobuild-${{ runner.os }}-${{ runner.arch }}-vulncheck-${{ hashFiles('**/go.sum') }}-
+            gobuild-${{ runner.os }}-${{ runner.arch }}-vulncheck-
+      # yamllint enable rule:line-length
+
+      - name: Install Tools
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - name: Run govulncheck
+        run: govulncheck ./...
+      - name: Run gosec
+        run: gosec -conf .gosec.json ./...

@@ -1,0 +1,2448 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-14T14:16:23Z",
+  "repository": "lusoris/llama-swap",
+  "commit_sha": "a2796fb0306215c6883454a8707dfb22d25c3068",
+  "total_infractions": 292,
+  "infractions": [
+    {
+      "rule_id": "HISS-02",
+      "file_path": ".github/workflows/go-ci.yml",
+      "line_number": 87,
+      "message": "curl without --max-time waits on the network without a deadline",
+      "anchor": "text:a501b70380b1",
+      "fingerprint": ".github/workflows/go-ci.yml:HISS-02:text:a501b70380b1#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": ".github/workflows/publish-chart.yml",
+      "line_number": 160,
+      "message": "curl without --max-time waits on the network without a deadline",
+      "anchor": "text:a501b70380b1",
+      "fingerprint": ".github/workflows/publish-chart.yml:HISS-02:text:a501b70380b1#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/fake-model/main.go",
+      "line_number": 128,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:startLoading",
+      "fingerprint": "cmd/fake-model/main.go:HISS-02:fn:startLoading#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/fake-model/main.go",
+      "line_number": 155,
+      "symbol": "chatHandler",
+      "message": "Function 'chatHandler' (113 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:chatHandler",
+      "fingerprint": "cmd/fake-model/main.go:HISS-04:fn:chatHandler#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/kubeswap/manage.go",
+      "line_number": 33,
+      "symbol": "deleteModel",
+      "message": "Function 'deleteModel' (90 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:deleteModel",
+      "fingerprint": "cmd/kubeswap/manage.go:HISS-04:fn:deleteModel#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/kubeswap/manage.go",
+      "line_number": 133,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:waitForPodsGone",
+      "fingerprint": "cmd/kubeswap/manage.go:HISS-02:fn:waitForPodsGone#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/kubeswap/manage.go",
+      "line_number": 339,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:runStatusWithClient",
+      "fingerprint": "cmd/kubeswap/manage.go:HISS-02:fn:runStatusWithClient#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/kubeswap/manage.go",
+      "line_number": 358,
+      "symbol": "statusOnce",
+      "message": "Function 'statusOnce' (91 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:statusOnce",
+      "fingerprint": "cmd/kubeswap/manage.go:HISS-04:fn:statusOnce#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/kubeswap/manage.go",
+      "line_number": 540,
+      "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
+      "anchor": "fn:logsCmd",
+      "fingerprint": "cmd/kubeswap/manage.go:HISS-02:fn:logsCmd#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/kubeswap/objects.go",
+      "line_number": 55,
+      "symbol": "renderDeployment",
+      "message": "Function 'renderDeployment' (104 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:serveConfig.renderDeployment",
+      "fingerprint": "cmd/kubeswap/objects.go:HISS-04:fn:serveConfig.renderDeployment#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/kubeswap/serve.go",
+      "line_number": 66,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:waitForDeploymentGone",
+      "fingerprint": "cmd/kubeswap/serve.go:HISS-02:fn:waitForDeploymentGone#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/kubeswap/serve.go",
+      "line_number": 113,
+      "symbol": "ensureResources",
+      "message": "Function 'ensureResources' (83 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:ensureResources",
+      "fingerprint": "cmd/kubeswap/serve.go:HISS-04:fn:ensureResources#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/kubeswap/serve.go",
+      "line_number": 213,
+      "symbol": "createMissing",
+      "message": "Function 'createMissing' (75 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:createMissing",
+      "fingerprint": "cmd/kubeswap/serve.go:HISS-04:fn:createMissing#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/kubeswap/serve.go",
+      "line_number": 256,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:createMissing",
+      "fingerprint": "cmd/kubeswap/serve.go:HISS-02:fn:createMissing#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/kubeswap/serve.go",
+      "line_number": 351,
+      "symbol": "toConfig",
+      "message": "Function 'toConfig' (117 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:serveFlags.toConfig",
+      "fingerprint": "cmd/kubeswap/serve.go:HISS-04:fn:serveFlags.toConfig#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/kubeswap/serve.go",
+      "line_number": 520,
+      "symbol": "serveCmd",
+      "message": "Function 'serveCmd' (93 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:serveCmd",
+      "fingerprint": "cmd/kubeswap/serve.go:HISS-04:fn:serveCmd#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/kubeswap/serve.go",
+      "line_number": 578,
+      "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
+      "anchor": "fn:serveCmd",
+      "fingerprint": "cmd/kubeswap/serve.go:HISS-02:fn:serveCmd#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/kubeswap/serve.go",
+      "line_number": 664,
+      "symbol": "newServer",
+      "message": "Function 'newServer' (86 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:newServer",
+      "fingerprint": "cmd/kubeswap/serve.go:HISS-04:fn:newServer#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/kubeswap/serve.go",
+      "line_number": 821,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:server.pollLoop",
+      "fingerprint": "cmd/kubeswap/serve.go:HISS-02:fn:server.pollLoop#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "cmd/kubeswap/serve.go",
+      "line_number": 1157,
+      "symbol": "streamLogs",
+      "message": "Direct recursion in streamLogs; the call graph must form an acyclic DAG",
+      "anchor": "fn:server.streamLogs",
+      "fingerprint": "cmd/kubeswap/serve.go:HISS-01:fn:server.streamLogs#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "cmd/kubeswap/serve.go",
+      "line_number": 1168,
+      "message": "Legacy unchecked error assignment",
+      "anchor": "fn:server.streamLogs",
+      "fingerprint": "cmd/kubeswap/serve.go:HISS-07:fn:server.streamLogs#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/misc/benchmark-chatcompletion/main.go",
+      "line_number": 22,
+      "symbol": "main",
+      "message": "Function 'main' (138 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:main",
+      "fingerprint": "cmd/misc/benchmark-chatcompletion/main.go:HISS-04:fn:main#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/misc/benchmark-chatcompletion/main.go",
+      "line_number": 120,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:main",
+      "fingerprint": "cmd/misc/benchmark-chatcompletion/main.go:HISS-02:fn:main#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/monitor-test/main.go",
+      "line_number": 83,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:main",
+      "fingerprint": "cmd/monitor-test/main.go:HISS-02:fn:main#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/simple-responder/simple-responder.go",
+      "line_number": 18,
+      "symbol": "main",
+      "message": "Function 'main' (357 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:main",
+      "fingerprint": "cmd/simple-responder/simple-responder.go:HISS-04:fn:main#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/simple-responder/simple-responder.go",
+      "line_number": 351,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:main",
+      "fingerprint": "cmd/simple-responder/simple-responder.go:HISS-02:fn:main#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/test-concurrency/main.go",
+      "line_number": 13,
+      "symbol": "main",
+      "message": "Function 'main' (67 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:main",
+      "fingerprint": "cmd/test-concurrency/main.go:HISS-04:fn:main#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/test-concurrency/request.go",
+      "line_number": 47,
+      "message": "http.Post takes no context, so no deadline bounds it; use http.NewRequestWithContext",
+      "anchor": "fn:sendRequest",
+      "fingerprint": "cmd/test-concurrency/request.go:HISS-02:fn:sendRequest#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/test-concurrency/tui.go",
+      "line_number": 93,
+      "symbol": "Update",
+      "message": "Function 'Update' (65 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:model.Update",
+      "fingerprint": "cmd/test-concurrency/tui.go:HISS-04:fn:model.Update#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/vllm-wrapper/main.go",
+      "line_number": 49,
+      "symbol": "serveCmd",
+      "message": "Function 'serveCmd' (128 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:serveCmd",
+      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-04:fn:serveCmd#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/vllm-wrapper/main.go",
+      "line_number": 84,
+      "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
+      "anchor": "fn:serveCmd",
+      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:serveCmd#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/vllm-wrapper/main.go",
+      "line_number": 204,
+      "message": "http.Post takes no context, so no deadline bounds it; use http.NewRequestWithContext",
+      "anchor": "fn:sleepCmd",
+      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:sleepCmd#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/vllm-wrapper/main.go",
+      "line_number": 232,
+      "message": "http.Post takes no context, so no deadline bounds it; use http.NewRequestWithContext",
+      "anchor": "fn:sleepVLLM",
+      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:sleepVLLM#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/vllm-wrapper/main.go",
+      "line_number": 248,
+      "message": "http.Post takes no context, so no deadline bounds it; use http.NewRequestWithContext",
+      "anchor": "fn:wakeUpVLLM",
+      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:wakeUpVLLM#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/vllm-wrapper/main.go",
+      "line_number": 295,
+      "message": "http.Get takes no context, so no deadline bounds it; use http.NewRequestWithContext",
+      "anchor": "fn:checkHealthy",
+      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:checkHealthy#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/vllm-wrapper/main.go",
+      "line_number": 336,
+      "message": "exec.Command takes no context, so no deadline bounds it; use exec.CommandContext",
+      "anchor": "fn:startDaemon",
+      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:startDaemon#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "cmd/vllm-wrapper/main.go",
+      "line_number": 347,
+      "message": "Legacy unchecked error assignment",
+      "anchor": "fn:startDaemon",
+      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-07:fn:startDaemon#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/wol-proxy/wol-proxy.go",
+      "line_number": 47,
+      "symbol": "main",
+      "message": "Function 'main' (76 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:main",
+      "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-04:fn:main#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/wol-proxy/wol-proxy.go",
+      "line_number": 157,
+      "symbol": "newProxy",
+      "message": "Function 'newProxy' (120 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:newProxy",
+      "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-04:fn:newProxy#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/wol-proxy/wol-proxy.go",
+      "line_number": 169,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:newProxy",
+      "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-02:fn:newProxy#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/wol-proxy/wol-proxy.go",
+      "line_number": 176,
+      "message": "http.NewRequest takes no context, so no deadline bounds it; use http.NewRequestWithContext",
+      "anchor": "fn:newProxy",
+      "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-02:fn:newProxy#2"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "cmd/wol-proxy/wol-proxy.go",
+      "line_number": 203,
+      "message": "Legacy unchecked error assignment",
+      "anchor": "fn:newProxy",
+      "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-07:fn:newProxy#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "cmd/wol-proxy/wol-proxy.go",
+      "line_number": 204,
+      "message": "Legacy unchecked error assignment",
+      "anchor": "fn:newProxy",
+      "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-07:fn:newProxy#2"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/wol-proxy/wol-proxy.go",
+      "line_number": 225,
+      "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
+      "anchor": "fn:newProxy",
+      "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-02:fn:newProxy#3"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/wol-proxy/wol-proxy.go",
+      "line_number": 229,
+      "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
+      "anchor": "fn:newProxy",
+      "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-02:fn:newProxy#4"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "cmd/wol-proxy/wol-proxy.go",
+      "line_number": 243,
+      "message": "Legacy unchecked error assignment",
+      "anchor": "fn:newProxy",
+      "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-07:fn:newProxy#3"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "cmd/wol-proxy/wol-proxy.go",
+      "line_number": 262,
+      "message": "Legacy unchecked error assignment",
+      "anchor": "fn:newProxy",
+      "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-07:fn:newProxy#4"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "cmd/wol-proxy/wol-proxy.go",
+      "line_number": 263,
+      "message": "Legacy unchecked error assignment",
+      "anchor": "fn:newProxy",
+      "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-07:fn:newProxy#5"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "cmd/wol-proxy/wol-proxy.go",
+      "line_number": 270,
+      "message": "Legacy unchecked error assignment",
+      "anchor": "fn:newProxy",
+      "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-07:fn:newProxy#6"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "cmd/wol-proxy/wol-proxy.go",
+      "line_number": 290,
+      "symbol": "ServeHTTP",
+      "message": "Function 'ServeHTTP' (80 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:proxyServer.ServeHTTP",
+      "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-04:fn:proxyServer.ServeHTTP#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/wol-proxy/wol-proxy.go",
+      "line_number": 353,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:proxyServer.ServeHTTP",
+      "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-02:fn:proxyServer.ServeHTTP#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "cmd/wol-proxy/wol-proxy.go",
+      "line_number": 516,
+      "message": "net.DialUDP takes no context, so no deadline bounds it; use net.Dialer.DialContext",
+      "anchor": "fn:sendMagicPacket",
+      "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-02:fn:sendMagicPacket#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "docker/build-container.sh",
+      "line_number": 66,
+      "message": "curl without --max-time waits on the network without a deadline",
+      "anchor": "text:2716f287b07b",
+      "fingerprint": "docker/build-container.sh:HISS-02:text:2716f287b07b#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "docker/build-container.sh",
+      "line_number": 84,
+      "message": "Unbounded loop in shell without an explicit scalar bound",
+      "anchor": "fn:fetch_llama_tag",
+      "fingerprint": "docker/build-container.sh:HISS-02:fn:fetch_llama_tag#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "docker/build-container.sh",
+      "line_number": 87,
+      "message": "curl without --max-time waits on the network without a deadline",
+      "anchor": "fn:fetch_llama_tag",
+      "fingerprint": "docker/build-container.sh:HISS-02:fn:fetch_llama_tag#2"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "docker/build-image.sh",
+      "line_number": 133,
+      "message": "curl without --max-time waits on the network without a deadline",
+      "anchor": "fn:get_latest_release_tag",
+      "fingerprint": "docker/build-image.sh:HISS-02:fn:get_latest_release_tag#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/build-image.sh",
+      "line_number": 813,
+      "message": "'|| true' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "text:cdb6d32bf937",
+      "fingerprint": "docker/unified/build-image.sh:HISS-07:text:cdb6d32bf937#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/build-image.sh",
+      "line_number": 828,
+      "message": "'|| true' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "text:7205987ead90",
+      "fingerprint": "docker/unified/build-image.sh:HISS-07:text:7205987ead90#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/install-audio.sh",
+      "line_number": 1,
+      "message": "Shell strict mode incomplete: set -u, set -o pipefail not enabled, so a failed command, an unset variable or a failure inside a pipeline passes unchecked",
+      "anchor": "text:3667bb6922c0",
+      "fingerprint": "docker/unified/install-audio.sh:HISS-07:text:3667bb6922c0#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/install-audio.sh",
+      "line_number": 92,
+      "message": "'|| true' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "text:afb286c59f50",
+      "fingerprint": "docker/unified/install-audio.sh:HISS-07:text:afb286c59f50#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/install-audio.sh",
+      "line_number": 104,
+      "message": "'|| true' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "fn:verify_linkage",
+      "fingerprint": "docker/unified/install-audio.sh:HISS-07:fn:verify_linkage#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/install-ik-llama.sh",
+      "line_number": 1,
+      "message": "Shell strict mode incomplete: set -u, set -o pipefail not enabled, so a failed command, an unset variable or a failure inside a pipeline passes unchecked",
+      "anchor": "text:3667bb6922c0",
+      "fingerprint": "docker/unified/install-ik-llama.sh:HISS-07:text:3667bb6922c0#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/install-ik-llama.sh",
+      "line_number": 55,
+      "message": "'|| true' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "text:afb286c59f50",
+      "fingerprint": "docker/unified/install-ik-llama.sh:HISS-07:text:afb286c59f50#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/install-kubeswap.sh",
+      "line_number": 1,
+      "message": "Shell strict mode incomplete: set -u, set -o pipefail not enabled, so a failed command, an unset variable or a failure inside a pipeline passes unchecked",
+      "anchor": "text:3667bb6922c0",
+      "fingerprint": "docker/unified/install-kubeswap.sh:HISS-07:text:3667bb6922c0#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/install-llama-swap.sh",
+      "line_number": 1,
+      "message": "Shell strict mode incomplete: set -u, set -o pipefail not enabled, so a failed command, an unset variable or a failure inside a pipeline passes unchecked",
+      "anchor": "text:3667bb6922c0",
+      "fingerprint": "docker/unified/install-llama-swap.sh:HISS-07:text:3667bb6922c0#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "docker/unified/install-llama-swap.sh",
+      "line_number": 55,
+      "message": "curl without --max-time waits on the network without a deadline",
+      "anchor": "text:ed31115fdd56",
+      "fingerprint": "docker/unified/install-llama-swap.sh:HISS-02:text:ed31115fdd56#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/install-llama.sh",
+      "line_number": 1,
+      "message": "Shell strict mode incomplete: set -u, set -o pipefail not enabled, so a failed command, an unset variable or a failure inside a pipeline passes unchecked",
+      "anchor": "text:3667bb6922c0",
+      "fingerprint": "docker/unified/install-llama.sh:HISS-07:text:3667bb6922c0#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/install-llama.sh",
+      "line_number": 49,
+      "message": "'|| true' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "text:afb286c59f50",
+      "fingerprint": "docker/unified/install-llama.sh:HISS-07:text:afb286c59f50#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/install-sd.sh",
+      "line_number": 1,
+      "message": "Shell strict mode incomplete: set -u, set -o pipefail not enabled, so a failed command, an unset variable or a failure inside a pipeline passes unchecked",
+      "anchor": "text:3667bb6922c0",
+      "fingerprint": "docker/unified/install-sd.sh:HISS-07:text:3667bb6922c0#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/install-sd.sh",
+      "line_number": 53,
+      "message": "'|| true' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "text:afb286c59f50",
+      "fingerprint": "docker/unified/install-sd.sh:HISS-07:text:afb286c59f50#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/install-vllm-wrapper.sh",
+      "line_number": 1,
+      "message": "Shell strict mode incomplete: set -u, set -o pipefail not enabled, so a failed command, an unset variable or a failure inside a pipeline passes unchecked",
+      "anchor": "text:3667bb6922c0",
+      "fingerprint": "docker/unified/install-vllm-wrapper.sh:HISS-07:text:3667bb6922c0#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/install-whisper.sh",
+      "line_number": 1,
+      "message": "Shell strict mode incomplete: set -u, set -o pipefail not enabled, so a failed command, an unset variable or a failure inside a pipeline passes unchecked",
+      "anchor": "text:3667bb6922c0",
+      "fingerprint": "docker/unified/install-whisper.sh:HISS-07:text:3667bb6922c0#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/install-whisper.sh",
+      "line_number": 59,
+      "message": "'|| true' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "text:afb286c59f50",
+      "fingerprint": "docker/unified/install-whisper.sh:HISS-07:text:afb286c59f50#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/lib-release.sh",
+      "line_number": 1,
+      "message": "Shell strict mode incomplete: set -e, set -u, set -o pipefail not enabled, so a failed command, an unset variable or a failure inside a pipeline passes unchecked",
+      "anchor": "text:3667bb6922c0",
+      "fingerprint": "docker/unified/lib-release.sh:HISS-07:text:3667bb6922c0#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "docker/unified/lib-release.sh",
+      "line_number": 21,
+      "message": "curl without --max-time waits on the network without a deadline",
+      "anchor": "fn:resolve_latest_version",
+      "fingerprint": "docker/unified/lib-release.sh:HISS-02:fn:resolve_latest_version#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/lib-release.sh",
+      "line_number": 22,
+      "message": "'|| true' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "fn:resolve_latest_version",
+      "fingerprint": "docker/unified/lib-release.sh:HISS-07:fn:resolve_latest_version#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "docker/unified/lib-release.sh",
+      "line_number": 28,
+      "message": "'|| true' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "fn:resolve_latest_version",
+      "fingerprint": "docker/unified/lib-release.sh:HISS-07:fn:resolve_latest_version#2"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/config/load.go",
+      "line_number": 14,
+      "symbol": "LoadConfigFromReader",
+      "message": "Function 'LoadConfigFromReader' (306 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:LoadConfigFromReader",
+      "fingerprint": "internal/config/load.go:HISS-04:fn:LoadConfigFromReader#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/config/macros.go",
+      "line_number": 63,
+      "symbol": "resolveConfigMacros",
+      "message": "Function 'resolveConfigMacros' (147 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:resolveConfigMacros",
+      "fingerprint": "internal/config/macros.go:HISS-04:fn:resolveConfigMacros#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/config/macros.go",
+      "line_number": 351,
+      "symbol": "validateMacroUses",
+      "message": "Function 'validateMacroUses' (61 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:validateMacroUses",
+      "fingerprint": "internal/config/macros.go:HISS-04:fn:validateMacroUses#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/config/macros.go",
+      "line_number": 393,
+      "symbol": "validateMacroUses",
+      "message": "Direct recursion in validateMacroUses; the call graph must form an acyclic DAG",
+      "anchor": "fn:validateMacroUses",
+      "fingerprint": "internal/config/macros.go:HISS-01:fn:validateMacroUses#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/config/macros.go",
+      "line_number": 401,
+      "symbol": "validateMacroUses",
+      "message": "Direct recursion in validateMacroUses; the call graph must form an acyclic DAG",
+      "anchor": "fn:validateMacroUses",
+      "fingerprint": "internal/config/macros.go:HISS-01:fn:validateMacroUses#2"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/config/macros.go",
+      "line_number": 434,
+      "symbol": "substituteMacroInValue",
+      "message": "Direct recursion in substituteMacroInValue; the call graph must form an acyclic DAG",
+      "anchor": "fn:substituteMacroInValue",
+      "fingerprint": "internal/config/macros.go:HISS-01:fn:substituteMacroInValue#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/config/macros.go",
+      "line_number": 442,
+      "symbol": "substituteMacroInValue",
+      "message": "Direct recursion in substituteMacroInValue; the call graph must form an acyclic DAG",
+      "anchor": "fn:substituteMacroInValue",
+      "fingerprint": "internal/config/macros.go:HISS-01:fn:substituteMacroInValue#2"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/config/mcpprovider.go",
+      "line_number": 157,
+      "symbol": "Call",
+      "message": "Function 'Call' (83 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:ConfigProvider.Call",
+      "fingerprint": "internal/config/mcpprovider.go:HISS-04:fn:ConfigProvider.Call#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/config/mcpprovider.go",
+      "line_number": 262,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:runConfigQuery",
+      "fingerprint": "internal/config/mcpprovider.go:HISS-02:fn:runConfigQuery#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/config/mcpprovider.go",
+      "line_number": 306,
+      "symbol": "countValues",
+      "message": "Direct recursion in countValues; the call graph must form an acyclic DAG",
+      "anchor": "fn:countValues",
+      "fingerprint": "internal/config/mcpprovider.go:HISS-01:fn:countValues#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/config/mcpprovider.go",
+      "line_number": 315,
+      "symbol": "countValues",
+      "message": "Direct recursion in countValues; the call graph must form an acyclic DAG",
+      "anchor": "fn:countValues",
+      "fingerprint": "internal/config/mcpprovider.go:HISS-01:fn:countValues#2"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/config/mcpprovider.go",
+      "line_number": 383,
+      "symbol": "normalizeQueryNumbers",
+      "message": "Direct recursion in normalizeQueryNumbers; the call graph must form an acyclic DAG",
+      "anchor": "fn:normalizeQueryNumbers",
+      "fingerprint": "internal/config/mcpprovider.go:HISS-01:fn:normalizeQueryNumbers#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/config/mcpprovider.go",
+      "line_number": 388,
+      "symbol": "normalizeQueryNumbers",
+      "message": "Direct recursion in normalizeQueryNumbers; the call graph must form an acyclic DAG",
+      "anchor": "fn:normalizeQueryNumbers",
+      "fingerprint": "internal/config/mcpprovider.go:HISS-01:fn:normalizeQueryNumbers#2"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/config/mcpprovider.go",
+      "line_number": 435,
+      "symbol": "configProviderDefaults",
+      "message": "Function 'configProviderDefaults' (66 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:configProviderDefaults",
+      "fingerprint": "internal/config/mcpprovider.go:HISS-04:fn:configProviderDefaults#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/config/mcpprovider.go",
+      "line_number": 552,
+      "symbol": "pruneConfigDefaults",
+      "message": "Direct recursion in pruneConfigDefaults; the call graph must form an acyclic DAG",
+      "anchor": "fn:pruneConfigDefaults",
+      "fingerprint": "internal/config/mcpprovider.go:HISS-01:fn:pruneConfigDefaults#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/config/mcpprovider.go",
+      "line_number": 566,
+      "symbol": "pruneConfigDefaults",
+      "message": "Direct recursion in pruneConfigDefaults; the call graph must form an acyclic DAG",
+      "anchor": "fn:pruneConfigDefaults",
+      "fingerprint": "internal/config/mcpprovider.go:HISS-01:fn:pruneConfigDefaults#2"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/config/mcpprovider.go",
+      "line_number": 601,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:newHeapGuard",
+      "fingerprint": "internal/config/mcpprovider.go:HISS-02:fn:newHeapGuard#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/config/merge.go",
+      "line_number": 33,
+      "symbol": "LoadConfigSources",
+      "message": "Function 'LoadConfigSources' (70 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:LoadConfigSources",
+      "fingerprint": "internal/config/merge.go:HISS-04:fn:LoadConfigSources#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/config/peer.go",
+      "line_number": 92,
+      "symbol": "ValidatePeerNamespace",
+      "message": "Function 'ValidatePeerNamespace' (64 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:ValidatePeerNamespace",
+      "fingerprint": "internal/config/peer.go:HISS-04:fn:ValidatePeerNamespace#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/config/redact.go",
+      "line_number": 95,
+      "symbol": "pruneEmpty",
+      "message": "Direct recursion in pruneEmpty; the call graph must form an acyclic DAG",
+      "anchor": "fn:pruneEmpty",
+      "fingerprint": "internal/config/redact.go:HISS-01:fn:pruneEmpty#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/config/redact.go",
+      "line_number": 103,
+      "symbol": "pruneEmpty",
+      "message": "Direct recursion in pruneEmpty; the call graph must form an acyclic DAG",
+      "anchor": "fn:pruneEmpty",
+      "fingerprint": "internal/config/redact.go:HISS-01:fn:pruneEmpty#2"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/config/redact.go",
+      "line_number": 158,
+      "symbol": "redactValue",
+      "message": "Direct recursion in redactValue; the call graph must form an acyclic DAG",
+      "anchor": "fn:redactValue",
+      "fingerprint": "internal/config/redact.go:HISS-01:fn:redactValue#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/config/redact.go",
+      "line_number": 166,
+      "symbol": "redactValue",
+      "message": "Direct recursion in redactValue; the call graph must form an acyclic DAG",
+      "anchor": "fn:redactValue",
+      "fingerprint": "internal/config/redact.go:HISS-01:fn:redactValue#2"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/config/selectors.go",
+      "line_number": 49,
+      "symbol": "validateSelectors",
+      "message": "Function 'validateSelectors' (70 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:validateSelectors",
+      "fingerprint": "internal/config/selectors.go:HISS-04:fn:validateSelectors#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/config/tailcat.go",
+      "line_number": 66,
+      "symbol": "validateTailcatConfig",
+      "message": "Function 'validateTailcatConfig' (67 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:validateTailcatConfig",
+      "fingerprint": "internal/config/tailcat.go:HISS-04:fn:validateTailcatConfig#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/docagent/configdoc.go",
+      "line_number": 27,
+      "symbol": "parseConfigExample",
+      "message": "Function 'parseConfigExample' (81 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:parseConfigExample",
+      "fingerprint": "internal/docagent/configdoc.go:HISS-04:fn:parseConfigExample#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/docagent/kb.go",
+      "line_number": 45,
+      "message": "Legacy unchecked error assignment",
+      "anchor": "fn:parseKB",
+      "fingerprint": "internal/docagent/kb.go:HISS-07:fn:parseKB#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/docagent/kb.go",
+      "line_number": 133,
+      "message": "Legacy unchecked error assignment",
+      "anchor": "fn:splitFrontmatter",
+      "fingerprint": "internal/docagent/kb.go:HISS-07:fn:splitFrontmatter#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/docagent/mcpprovider.go",
+      "line_number": 62,
+      "symbol": "Tools",
+      "message": "Function 'Tools' (113 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:DocsProvider.Tools",
+      "fingerprint": "internal/docagent/mcpprovider.go:HISS-04:fn:DocsProvider.Tools#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/docagent/schema.go",
+      "line_number": 125,
+      "symbol": "renderFragment",
+      "message": "Function 'renderFragment' (61 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:Docs.renderFragment",
+      "fingerprint": "internal/docagent/schema.go:HISS-04:fn:Docs.renderFragment#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/docagent/search.go",
+      "line_number": 36,
+      "symbol": "Search",
+      "message": "Function 'Search' (102 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:Docs.Search",
+      "fingerprint": "internal/docagent/search.go:HISS-04:fn:Docs.Search#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/event/event.go",
+      "line_number": 104,
+      "message": "Legacy panic invocation in production code path",
+      "anchor": "fn:SubscribeTo",
+      "fingerprint": "internal/event/event.go:HISS-07:fn:SubscribeTo#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/event/event.go",
+      "line_number": 177,
+      "message": "Legacy panic invocation in production code path",
+      "anchor": "fn:groupOf",
+      "fingerprint": "internal/event/event.go:HISS-07:fn:groupOf#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/event/event.go",
+      "line_number": 192,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:consumer.Listen",
+      "fingerprint": "internal/event/event.go:HISS-02:fn:consumer.Listen#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/hw/detect_darwin.go",
+      "line_number": 44,
+      "symbol": "parseSystemProfiler",
+      "message": "Function 'parseSystemProfiler' (62 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:parseSystemProfiler",
+      "fingerprint": "internal/hw/detect_darwin.go:HISS-04:fn:parseSystemProfiler#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/hw/detect_linux.go",
+      "line_number": 179,
+      "symbol": "detectDRMSysfsFrom",
+      "message": "Function 'detectDRMSysfsFrom' (66 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:detectDRMSysfsFrom",
+      "fingerprint": "internal/hw/detect_linux.go:HISS-04:fn:detectDRMSysfsFrom#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/hw/detect_linux.go",
+      "line_number": 356,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:packageSocketCount",
+      "fingerprint": "internal/hw/detect_linux.go:HISS-02:fn:packageSocketCount#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/hw/dxgi_windows.go",
+      "line_number": 45,
+      "message": "unsafe.Sizeof without a preceding // SAFETY: proof comment",
+      "anchor": "fn:init",
+      "fingerprint": "internal/hw/dxgi_windows.go:HISS-09:fn:init#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/hw/dxgi_windows.go",
+      "line_number": 46,
+      "message": "Legacy panic invocation in production code path",
+      "anchor": "fn:init",
+      "fingerprint": "internal/hw/dxgi_windows.go:HISS-07:fn:init#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/hw/dxgi_windows.go",
+      "line_number": 50,
+      "symbol": "detectDXGI",
+      "message": "Function 'detectDXGI' (66 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:detectDXGI",
+      "fingerprint": "internal/hw/dxgi_windows.go:HISS-04:fn:detectDXGI#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/hw/dxgi_windows.go",
+      "line_number": 56,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:detectDXGI",
+      "fingerprint": "internal/hw/dxgi_windows.go:HISS-09:fn:detectDXGI#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/hw/dxgi_windows.go",
+      "line_number": 57,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:detectDXGI",
+      "fingerprint": "internal/hw/dxgi_windows.go:HISS-09:fn:detectDXGI#2"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/hw/dxgi_windows.go",
+      "line_number": 65,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:detectDXGI",
+      "fingerprint": "internal/hw/dxgi_windows.go:HISS-02:fn:detectDXGI#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/hw/dxgi_windows.go",
+      "line_number": 69,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:detectDXGI",
+      "fingerprint": "internal/hw/dxgi_windows.go:HISS-09:fn:detectDXGI#3"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/hw/dxgi_windows.go",
+      "line_number": 71,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:detectDXGI",
+      "fingerprint": "internal/hw/dxgi_windows.go:HISS-09:fn:detectDXGI#4"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/hw/dxgi_windows.go",
+      "line_number": 83,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:detectDXGI",
+      "fingerprint": "internal/hw/dxgi_windows.go:HISS-09:fn:detectDXGI#5"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/hw/dxgi_windows.go",
+      "line_number": 84,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:detectDXGI",
+      "fingerprint": "internal/hw/dxgi_windows.go:HISS-09:fn:detectDXGI#6"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/hw/dxgi_windows.go",
+      "line_number": 119,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:releaseDXGI",
+      "fingerprint": "internal/hw/dxgi_windows.go:HISS-09:fn:releaseDXGI#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/hw/validate.go",
+      "line_number": 9,
+      "symbol": "Validate",
+      "message": "Function 'Validate' (69 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:HardwareSnapshot.Validate",
+      "fingerprint": "internal/hw/validate.go:HISS-04:fn:HardwareSnapshot.Validate#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/logmon/logging_test.go",
+      "line_number": 240,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:TestLogMonitor_DropsWhenSubscriberBlocked",
+      "fingerprint": "internal/logmon/logging_test.go:HISS-02:fn:TestLogMonitor_DropsWhenSubscriberBlocked#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/matrix/dsl.go",
+      "line_number": 208,
+      "symbol": "walk",
+      "message": "Direct recursion in walk; the call graph must form an acyclic DAG",
+      "anchor": "fn:walk",
+      "fingerprint": "internal/matrix/dsl.go:HISS-01:fn:walk#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/matrix/program.go",
+      "line_number": 50,
+      "symbol": "Compile",
+      "message": "Function 'Compile' (121 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:Compile",
+      "fingerprint": "internal/matrix/program.go:HISS-04:fn:Compile#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/matrix/program.go",
+      "line_number": 266,
+      "symbol": "simplifyEmptyRefs",
+      "message": "Direct recursion in simplifyEmptyRefs; the call graph must form an acyclic DAG",
+      "anchor": "fn:simplifyEmptyRefs",
+      "fingerprint": "internal/matrix/program.go:HISS-01:fn:simplifyEmptyRefs#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/matrix/program.go",
+      "line_number": 323,
+      "symbol": "Solve",
+      "message": "Function 'Solve' (67 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:Program.Solve",
+      "fingerprint": "internal/matrix/program.go:HISS-04:fn:Program.Solve#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/matrix/program.go",
+      "line_number": 533,
+      "symbol": "evaluate",
+      "message": "Direct recursion in evaluate; the call graph must form an acyclic DAG",
+      "anchor": "fn:evaluator.evaluate",
+      "fingerprint": "internal/matrix/program.go:HISS-01:fn:evaluator.evaluate#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/matrix/program.go",
+      "line_number": 536,
+      "symbol": "evaluate",
+      "message": "Direct recursion in evaluate; the call graph must form an acyclic DAG",
+      "anchor": "fn:evaluator.evaluate",
+      "fingerprint": "internal/matrix/program.go:HISS-01:fn:evaluator.evaluate#2"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/matrix/program.go",
+      "line_number": 548,
+      "symbol": "evaluate",
+      "message": "Direct recursion in evaluate; the call graph must form an acyclic DAG",
+      "anchor": "fn:evaluator.evaluate",
+      "fingerprint": "internal/matrix/program.go:HISS-01:fn:evaluator.evaluate#3"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/mcptools/registry_test.go",
+      "line_number": 196,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:TestRegistry_Paginates",
+      "fingerprint": "internal/mcptools/registry_test.go:HISS-02:fn:TestRegistry_Paginates#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 58,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:ntstatusCall",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:ntstatusCall#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 72,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:d3dkmEnumerateAdapters",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:d3dkmEnumerateAdapters#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 74,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:d3dkmEnumerateAdapters",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:d3dkmEnumerateAdapters#2"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 92,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:d3dkmOpenAdapter",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:d3dkmOpenAdapter#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 101,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:d3dkmCloseAdapter",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:d3dkmCloseAdapter#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 111,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:d3dkmGetAdapterPerfData",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:d3dkmGetAdapterPerfData#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 112,
+      "message": "unsafe.Sizeof without a preceding // SAFETY: proof comment",
+      "anchor": "fn:d3dkmGetAdapterPerfData",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:d3dkmGetAdapterPerfData#2"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 114,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:d3dkmGetAdapterPerfData",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:d3dkmGetAdapterPerfData#3"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 127,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:d3dkmGetAdapterPerfDataCaps",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:d3dkmGetAdapterPerfDataCaps#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 128,
+      "message": "unsafe.Sizeof without a preceding // SAFETY: proof comment",
+      "anchor": "fn:d3dkmGetAdapterPerfDataCaps",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:d3dkmGetAdapterPerfDataCaps#2"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 130,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:d3dkmGetAdapterPerfDataCaps",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:d3dkmGetAdapterPerfDataCaps#3"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 163,
+      "message": "unsafe.Sizeof without a preceding // SAFETY: proof comment",
+      "anchor": "fn:init",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:init#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 164,
+      "message": "Legacy panic invocation in production code path",
+      "anchor": "fn:init",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-07:fn:init#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 164,
+      "message": "unsafe.Sizeof without a preceding // SAFETY: proof comment",
+      "anchor": "fn:init",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:init#2"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 166,
+      "message": "unsafe.Offsetof without a preceding // SAFETY: proof comment",
+      "anchor": "fn:init",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:init#3"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 167,
+      "message": "Legacy panic invocation in production code path",
+      "anchor": "fn:init",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-07:fn:init#2"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 167,
+      "message": "unsafe.Offsetof without a preceding // SAFETY: proof comment",
+      "anchor": "fn:init",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:init#4"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 171,
+      "message": "unsafe.Sizeof without a preceding // SAFETY: proof comment",
+      "anchor": "fn:init",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:init#5"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 172,
+      "message": "Legacy panic invocation in production code path",
+      "anchor": "fn:init",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-07:fn:init#3"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 172,
+      "message": "unsafe.Sizeof without a preceding // SAFETY: proof comment",
+      "anchor": "fn:init",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:init#6"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 176,
+      "message": "unsafe.Sizeof without a preceding // SAFETY: proof comment",
+      "anchor": "fn:init",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:init#7"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 177,
+      "message": "Legacy panic invocation in production code path",
+      "anchor": "fn:init",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-07:fn:init#4"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 177,
+      "message": "unsafe.Sizeof without a preceding // SAFETY: proof comment",
+      "anchor": "fn:init",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:init#8"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 198,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:d3dkmQueryAdapterStats",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:d3dkmQueryAdapterStats#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 214,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:d3dkmQuerySegmentStats",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:d3dkmQuerySegmentStats#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 233,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:d3dkmQueryNodeStats",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-09:fn:d3dkmQueryNodeStats#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 312,
+      "symbol": "tryD3DKMT",
+      "message": "Function 'tryD3DKMT' (218 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:tryD3DKMT",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-04:fn:tryD3DKMT#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/perf/d3dkmt_windows.go",
+      "line_number": 427,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:tryD3DKMT",
+      "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-02:fn:tryD3DKMT#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/perf/gpu_parse.go",
+      "line_number": 146,
+      "symbol": "ParseMactopLine",
+      "message": "Function 'ParseMactopLine' (69 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:ParseMactopLine",
+      "fingerprint": "internal/perf/gpu_parse.go:HISS-04:fn:ParseMactopLine#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/perf/monitor.go",
+      "line_number": 147,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:Monitor.Start",
+      "fingerprint": "internal/perf/monitor.go:HISS-02:fn:Monitor.Start#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/perf/monitor.go",
+      "line_number": 190,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:Monitor.collectGpuStats",
+      "fingerprint": "internal/perf/monitor.go:HISS-02:fn:Monitor.collectGpuStats#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/perf/monitor.go",
+      "line_number": 230,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:Monitor.forwardGpuStats",
+      "fingerprint": "internal/perf/monitor.go:HISS-02:fn:Monitor.forwardGpuStats#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/perf/monitor_darwin.go",
+      "line_number": 60,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:tryIoreg",
+      "fingerprint": "internal/perf/monitor_darwin.go:HISS-02:fn:tryIoreg#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/perf/monitor_test.go",
+      "line_number": 306,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:waitGpuStat",
+      "fingerprint": "internal/perf/monitor_test.go:HISS-02:fn:waitGpuStat#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/perf/monitor_unix.go",
+      "line_number": 58,
+      "symbol": "tryLACT",
+      "message": "Function 'tryLACT' (77 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:tryLACT",
+      "fingerprint": "internal/perf/monitor_unix.go:HISS-04:fn:tryLACT#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/perf/monitor_unix.go",
+      "line_number": 88,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:tryLACT",
+      "fingerprint": "internal/perf/monitor_unix.go:HISS-02:fn:tryLACT#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/perf/monitor_unix.go",
+      "line_number": 189,
+      "symbol": "tryRocmSmi",
+      "message": "Function 'tryRocmSmi' (64 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:tryRocmSmi",
+      "fingerprint": "internal/perf/monitor_unix.go:HISS-04:fn:tryRocmSmi#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/perf/monitor_unix.go",
+      "line_number": 205,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:tryRocmSmi",
+      "fingerprint": "internal/perf/monitor_unix.go:HISS-02:fn:tryRocmSmi#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/perf/monitor_unix.go",
+      "line_number": 254,
+      "symbol": "parseRocmSmiLine",
+      "message": "Function 'parseRocmSmiLine' (84 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:parseRocmSmiLine",
+      "fingerprint": "internal/perf/monitor_unix.go:HISS-04:fn:parseRocmSmiLine#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/perf/monitor_unix.go",
+      "line_number": 445,
+      "symbol": "lactGetDeviceStats",
+      "message": "Function 'lactGetDeviceStats' (84 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:lactGetDeviceStats",
+      "fingerprint": "internal/perf/monitor_unix.go:HISS-04:fn:lactGetDeviceStats#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/pdh_windows.go",
+      "line_number": 41,
+      "message": "unsafe.Sizeof without a preceding // SAFETY: proof comment",
+      "anchor": "fn:init",
+      "fingerprint": "internal/perf/pdh_windows.go:HISS-09:fn:init#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/perf/pdh_windows.go",
+      "line_number": 42,
+      "message": "Legacy panic invocation in production code path",
+      "anchor": "fn:init",
+      "fingerprint": "internal/perf/pdh_windows.go:HISS-07:fn:init#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/pdh_windows.go",
+      "line_number": 42,
+      "message": "unsafe.Sizeof without a preceding // SAFETY: proof comment",
+      "anchor": "fn:init",
+      "fingerprint": "internal/perf/pdh_windows.go:HISS-09:fn:init#2"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/pdh_windows.go",
+      "line_number": 55,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:initPdhGpuUtil",
+      "fingerprint": "internal/perf/pdh_windows.go:HISS-09:fn:initPdhGpuUtil#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/pdh_windows.go",
+      "line_number": 62,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:initPdhGpuUtil",
+      "fingerprint": "internal/perf/pdh_windows.go:HISS-09:fn:initPdhGpuUtil#2"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/pdh_windows.go",
+      "line_number": 62,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:initPdhGpuUtil",
+      "fingerprint": "internal/perf/pdh_windows.go:HISS-09:fn:initPdhGpuUtil#3"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/pdh_windows.go",
+      "line_number": 94,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:pdhGpuUtil.collect",
+      "fingerprint": "internal/perf/pdh_windows.go:HISS-09:fn:pdhGpuUtil.collect#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/pdh_windows.go",
+      "line_number": 95,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:pdhGpuUtil.collect",
+      "fingerprint": "internal/perf/pdh_windows.go:HISS-09:fn:pdhGpuUtil.collect#2"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/pdh_windows.go",
+      "line_number": 105,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:pdhGpuUtil.collect",
+      "fingerprint": "internal/perf/pdh_windows.go:HISS-09:fn:pdhGpuUtil.collect#3"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/pdh_windows.go",
+      "line_number": 106,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:pdhGpuUtil.collect",
+      "fingerprint": "internal/perf/pdh_windows.go:HISS-09:fn:pdhGpuUtil.collect#4"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/pdh_windows.go",
+      "line_number": 107,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:pdhGpuUtil.collect",
+      "fingerprint": "internal/perf/pdh_windows.go:HISS-09:fn:pdhGpuUtil.collect#5"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/pdh_windows.go",
+      "line_number": 113,
+      "message": "unsafe.Sizeof without a preceding // SAFETY: proof comment",
+      "anchor": "fn:pdhGpuUtil.collect",
+      "fingerprint": "internal/perf/pdh_windows.go:HISS-09:fn:pdhGpuUtil.collect#6"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/perf/pdh_windows.go",
+      "line_number": 117,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:pdhGpuUtil.collect",
+      "fingerprint": "internal/perf/pdh_windows.go:HISS-09:fn:pdhGpuUtil.collect#7"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/process/loading_progress.go",
+      "line_number": 87,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:ProcessCommand.setLoading",
+      "fingerprint": "internal/process/loading_progress.go:HISS-02:fn:ProcessCommand.setLoading#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/process/loading_progress_test.go",
+      "line_number": 115,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:TestProcessCommand_LoadingProgressExtendsTimeout",
+      "fingerprint": "internal/process/loading_progress_test.go:HISS-02:fn:TestProcessCommand_LoadingProgressExtendsTimeout#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/process/process_command.go",
+      "line_number": 175,
+      "symbol": "run",
+      "message": "Function 'run' (283 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:ProcessCommand.run",
+      "fingerprint": "internal/process/process_command.go:HISS-04:fn:ProcessCommand.run#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/process/process_command.go",
+      "line_number": 235,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:ProcessCommand.run",
+      "fingerprint": "internal/process/process_command.go:HISS-02:fn:ProcessCommand.run#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/process/process_command.go",
+      "line_number": 325,
+      "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
+      "anchor": "fn:ProcessCommand.run",
+      "fingerprint": "internal/process/process_command.go:HISS-02:fn:ProcessCommand.run#2"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/process/process_command.go",
+      "line_number": 459,
+      "symbol": "doStart",
+      "message": "Function 'doStart' (189 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:ProcessCommand.doStart",
+      "fingerprint": "internal/process/process_command.go:HISS-04:fn:ProcessCommand.doStart#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/process/process_command.go",
+      "line_number": 526,
+      "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
+      "anchor": "fn:ProcessCommand.doStart",
+      "fingerprint": "internal/process/process_command.go:HISS-02:fn:ProcessCommand.doStart#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/process/process_command.go",
+      "line_number": 595,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:ProcessCommand.doStart",
+      "fingerprint": "internal/process/process_command.go:HISS-02:fn:ProcessCommand.doStart#2"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/process/process_command.go",
+      "line_number": 665,
+      "message": "exec.Command takes no context, so no deadline bounds it; use exec.CommandContext",
+      "anchor": "fn:ProcessCommand.sendStopSignal",
+      "fingerprint": "internal/process/process_command.go:HISS-02:fn:ProcessCommand.sendStopSignal#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/process/process_command.go",
+      "line_number": 752,
+      "message": "Legacy unchecked error assignment",
+      "anchor": "fn:ProcessCommand.killProcess",
+      "fingerprint": "internal/process/process_command.go:HISS-07:fn:ProcessCommand.killProcess#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/process/process_command_forking_test.go",
+      "line_number": 226,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:TestProcessCommand_StopHonorsGracefulTimeout",
+      "fingerprint": "internal/process/process_command_forking_test.go:HISS-02:fn:TestProcessCommand_StopHonorsGracefulTimeout#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/process/process_command_forking_test.go",
+      "line_number": 295,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:TestProcessCommand_StopReapsForkedGrandchild",
+      "fingerprint": "internal/process/process_command_forking_test.go:HISS-02:fn:TestProcessCommand_StopReapsForkedGrandchild#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/process/runtime_windows.go",
+      "line_number": 50,
+      "message": "exec.Command takes no context, so no deadline bounds it; use exec.CommandContext",
+      "anchor": "fn:taskkillProcessTree",
+      "fingerprint": "internal/process/runtime_windows.go:HISS-02:fn:taskkillProcessTree#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/process/treecleanup_windows.go",
+      "line_number": 37,
+      "message": "unsafe.Pointer without a preceding // SAFETY: proof comment",
+      "anchor": "fn:SetupTreeCleanup",
+      "fingerprint": "internal/process/treecleanup_windows.go:HISS-09:fn:SetupTreeCleanup#1"
+    },
+    {
+      "rule_id": "HISS-09",
+      "file_path": "internal/process/treecleanup_windows.go",
+      "line_number": 38,
+      "message": "unsafe.Sizeof without a preceding // SAFETY: proof comment",
+      "anchor": "fn:SetupTreeCleanup",
+      "fingerprint": "internal/process/treecleanup_windows.go:HISS-09:fn:SetupTreeCleanup#2"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/process/upstream_keepalive_test.go",
+      "line_number": 41,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:newCloseAfterStreamUpstream",
+      "fingerprint": "internal/process/upstream_keepalive_test.go:HISS-02:fn:newCloseAfterStreamUpstream#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/process/upstream_keepalive_test.go",
+      "line_number": 75,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:closeAfterStreamUpstream.serve",
+      "fingerprint": "internal/process/upstream_keepalive_test.go:HISS-02:fn:closeAfterStreamUpstream.serve#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/router/base.go",
+      "line_number": 116,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:baseRouter.run",
+      "fingerprint": "internal/router/base.go:HISS-02:fn:baseRouter.run#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/router/base.go",
+      "line_number": 465,
+      "symbol": "ServeHTTP",
+      "message": "Function 'ServeHTTP' (156 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:baseRouter.ServeHTTP",
+      "fingerprint": "internal/router/base.go:HISS-04:fn:baseRouter.ServeHTTP#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/router/base.go",
+      "line_number": 549,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:baseRouter.ServeHTTP",
+      "fingerprint": "internal/router/base.go:HISS-02:fn:baseRouter.ServeHTTP#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/router/loading.go",
+      "line_number": 88,
+      "symbol": "start",
+      "message": "Function 'start' (63 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:loadingWriter.start",
+      "fingerprint": "internal/router/loading.go:HISS-04:fn:loadingWriter.start#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/router/loading.go",
+      "line_number": 121,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:loadingWriter.start",
+      "fingerprint": "internal/router/loading.go:HISS-02:fn:loadingWriter.start#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/router/peer.go",
+      "line_number": 48,
+      "symbol": "NewPeer",
+      "message": "Function 'NewPeer' (151 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:NewPeer",
+      "fingerprint": "internal/router/peer.go:HISS-04:fn:NewPeer#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/router/scheduler/fifo.go",
+      "line_number": 351,
+      "message": "Legacy panic invocation in production code path",
+      "anchor": "fn:FIFO.release",
+      "fingerprint": "internal/router/scheduler/fifo.go:HISS-07:fn:FIFO.release#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/server/api.go",
+      "line_number": 47,
+      "symbol": "renderCapabilities",
+      "message": "Function 'renderCapabilities' (61 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:renderCapabilities",
+      "fingerprint": "internal/server/api.go:HISS-04:fn:renderCapabilities#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/server/api.go",
+      "line_number": 138,
+      "symbol": "handleListModels",
+      "message": "Function 'handleListModels' (188 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:Server.handleListModels",
+      "fingerprint": "internal/server/api.go:HISS-04:fn:Server.handleListModels#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/server/api.go",
+      "line_number": 463,
+      "symbol": "handleUpstream",
+      "message": "Function 'handleUpstream' (74 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:Server.handleUpstream",
+      "fingerprint": "internal/server/api.go:HISS-04:fn:Server.handleUpstream#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/server/apigroup.go",
+      "line_number": 268,
+      "symbol": "parseActivityQuery",
+      "message": "Function 'parseActivityQuery' (76 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:parseActivityQuery",
+      "fingerprint": "internal/server/apigroup.go:HISS-04:fn:parseActivityQuery#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/server/apigroup.go",
+      "line_number": 533,
+      "symbol": "serveSSE",
+      "message": "Function 'serveSSE' (74 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:Server.serveSSE",
+      "fingerprint": "internal/server/apigroup.go:HISS-04:fn:Server.serveSSE#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/server/apigroup.go",
+      "line_number": 591,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:Server.serveSSE",
+      "fingerprint": "internal/server/apigroup.go:HISS-02:fn:Server.serveSSE#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/server/apigroup_test.go",
+      "line_number": 273,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:waitInflightTrackerCount",
+      "fingerprint": "internal/server/apigroup_test.go:HISS-02:fn:waitInflightTrackerCount#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/server/apigroup_test.go",
+      "line_number": 289,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:waitInflightEvent",
+      "fingerprint": "internal/server/apigroup_test.go:HISS-02:fn:waitInflightEvent#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/server/apimcp.go",
+      "line_number": 173,
+      "symbol": "handleAPIMCP",
+      "message": "Function 'handleAPIMCP' (82 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:Server.handleAPIMCP",
+      "fingerprint": "internal/server/apimcp.go:HISS-04:fn:Server.handleAPIMCP#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/server/apimcp.go",
+      "line_number": 263,
+      "message": "Legacy unchecked error assignment",
+      "anchor": "fn:Server.mcpToolsList",
+      "fingerprint": "internal/server/apimcp.go:HISS-07:fn:Server.mcpToolsList#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/server/captures.go",
+      "line_number": 93,
+      "message": "Legacy panic invocation in production code path",
+      "anchor": "fn:mustZstdEncoder",
+      "fingerprint": "internal/server/captures.go:HISS-07:fn:mustZstdEncoder#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/server/captures.go",
+      "line_number": 101,
+      "message": "Legacy panic invocation in production code path",
+      "anchor": "fn:mustZstdDecoder",
+      "fingerprint": "internal/server/captures.go:HISS-07:fn:mustZstdDecoder#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/server/embed.go",
+      "line_number": 23,
+      "message": "Legacy panic invocation in production code path",
+      "anchor": "text:3538d3e3d96d",
+      "fingerprint": "internal/server/embed.go:HISS-07:text:3538d3e3d96d#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/server/inflight.go",
+      "line_number": 199,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:inflightTracker.publishUpdates",
+      "fingerprint": "internal/server/inflight.go:HISS-02:fn:inflightTracker.publishUpdates#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/server/inflight.go",
+      "line_number": 224,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:inflightTracker.discardQueuedUpdates",
+      "fingerprint": "internal/server/inflight.go:HISS-02:fn:inflightTracker.discardQueuedUpdates#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/server/log.go",
+      "line_number": 106,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:Server.handleLogStream",
+      "fingerprint": "internal/server/log.go:HISS-02:fn:Server.handleLogStream#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/server/log_test.go",
+      "line_number": 397,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:TestServer_RequestLogMiddleware_WebSocketUpgrade",
+      "fingerprint": "internal/server/log_test.go:HISS-02:fn:TestServer_RequestLogMiddleware_WebSocketUpgrade#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/server/metrics.go",
+      "line_number": 143,
+      "symbol": "record",
+      "message": "Function 'record' (119 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:metricsMonitor.record",
+      "fingerprint": "internal/server/metrics.go:HISS-04:fn:metricsMonitor.record#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/server/metrics.go",
+      "line_number": 394,
+      "symbol": "processStreamingResponse",
+      "message": "Function 'processStreamingResponse' (74 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:processStreamingResponse",
+      "fingerprint": "internal/server/metrics.go:HISS-04:fn:processStreamingResponse#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/server/metrics.go",
+      "line_number": 479,
+      "symbol": "buildMetrics",
+      "message": "Function 'buildMetrics' (86 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:buildMetrics",
+      "fingerprint": "internal/server/metrics.go:HISS-04:fn:buildMetrics#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/server/metrics_middleware.go",
+      "line_number": 17,
+      "symbol": "CreateMetricsMiddleware",
+      "message": "Function 'CreateMetricsMiddleware' (69 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:CreateMetricsMiddleware",
+      "fingerprint": "internal/server/metrics_middleware.go:HISS-04:fn:CreateMetricsMiddleware#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/server/selector.go",
+      "line_number": 92,
+      "symbol": "CreateSelectorMiddleware",
+      "message": "Function 'CreateSelectorMiddleware' (61 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:CreateSelectorMiddleware",
+      "fingerprint": "internal/server/selector.go:HISS-04:fn:CreateSelectorMiddleware#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/server/server.go",
+      "line_number": 210,
+      "symbol": "New",
+      "message": "Function 'New' (62 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:New",
+      "fingerprint": "internal/server/server.go:HISS-04:fn:New#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "internal/server/server.go",
+      "line_number": 313,
+      "message": "Legacy unchecked error assignment",
+      "anchor": "fn:Server.serveConfiguredVoices",
+      "fingerprint": "internal/server/server.go:HISS-07:fn:Server.serveConfiguredVoices#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/server/server.go",
+      "line_number": 337,
+      "symbol": "routes",
+      "message": "Function 'routes' (122 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:Server.routes",
+      "fingerprint": "internal/server/server.go:HISS-04:fn:Server.routes#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/store/sqlite/sqlite.go",
+      "line_number": 52,
+      "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
+      "anchor": "fn:New",
+      "fingerprint": "internal/store/sqlite/sqlite.go:HISS-02:fn:New#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/store/sqlite/sqlite.go",
+      "line_number": 58,
+      "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
+      "anchor": "fn:New",
+      "fingerprint": "internal/store/sqlite/sqlite.go:HISS-02:fn:New#2"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/store/sqlite/sqlite.go",
+      "line_number": 67,
+      "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
+      "anchor": "fn:New",
+      "fingerprint": "internal/store/sqlite/sqlite.go:HISS-02:fn:New#3"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/store/sqlite/sqlite.go",
+      "line_number": 79,
+      "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
+      "anchor": "fn:New",
+      "fingerprint": "internal/store/sqlite/sqlite.go:HISS-02:fn:New#4"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/swaputil/http.go",
+      "line_number": 267,
+      "symbol": "ReplaceRequestModel",
+      "message": "Function 'ReplaceRequestModel' (85 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:ReplaceRequestModel",
+      "fingerprint": "internal/swaputil/http.go:HISS-04:fn:ReplaceRequestModel#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "internal/tailcat/transport.go",
+      "line_number": 220,
+      "symbol": "Start",
+      "message": "Function 'Start' (65 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:Start",
+      "fingerprint": "internal/tailcat/transport.go:HISS-04:fn:Start#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/tailcat/transport.go",
+      "line_number": 601,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:Client.drainRetiredClient",
+      "fingerprint": "internal/tailcat/transport.go:HISS-02:fn:Client.drainRetiredClient#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/tailcat/transport_test.go",
+      "line_number": 221,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:TestTailcatTransport_LocalDERPHTTP",
+      "fingerprint": "internal/tailcat/transport_test.go:HISS-02:fn:TestTailcatTransport_LocalDERPHTTP#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/tailcat/transport_test.go",
+      "line_number": 236,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:TestTailcatTransport_LocalDERPHTTP",
+      "fingerprint": "internal/tailcat/transport_test.go:HISS-02:fn:TestTailcatTransport_LocalDERPHTTP#2"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/tailcat/transport_test.go",
+      "line_number": 348,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:TestTailcatTransport_ReconnectAfterServerRestart",
+      "fingerprint": "internal/tailcat/transport_test.go:HISS-02:fn:TestTailcatTransport_ReconnectAfterServerRestart#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/tailcat/transport_test.go",
+      "line_number": 397,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:runLocalDERP",
+      "fingerprint": "internal/tailcat/transport_test.go:HISS-02:fn:runLocalDERP#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/watcher/dirwatcher.go",
+      "line_number": 82,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:DirWatcher.Run",
+      "fingerprint": "internal/watcher/dirwatcher.go:HISS-02:fn:DirWatcher.Run#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "internal/watcher/watcher.go",
+      "line_number": 46,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:Watcher.Run",
+      "fingerprint": "internal/watcher/watcher.go:HISS-02:fn:Watcher.Run#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "llama-swap.go",
+      "line_number": 117,
+      "symbol": "main",
+      "message": "Function 'main' (422 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:main",
+      "fingerprint": "llama-swap.go:HISS-04:fn:main#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "llama-swap.go",
+      "line_number": 468,
+      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
+      "anchor": "fn:main",
+      "fingerprint": "llama-swap.go:HISS-02:fn:main#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "scripts/add-changelog.sh",
+      "line_number": 30,
+      "message": "'|| true' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "fn:next_version",
+      "fingerprint": "scripts/add-changelog.sh:HISS-07:fn:next_version#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "scripts/install.sh",
+      "line_number": 9,
+      "message": "'|| :' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "text:eb10545d4592",
+      "fingerprint": "scripts/install.sh:HISS-07:text:eb10545d4592#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "scripts/install.sh",
+      "line_number": 9,
+      "message": "'|| :' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "text:eb10545d4592",
+      "fingerprint": "scripts/install.sh:HISS-07:text:eb10545d4592#2"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "scripts/install.sh",
+      "line_number": 10,
+      "message": "'|| :' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "text:0c77f36d3441",
+      "fingerprint": "scripts/install.sh:HISS-07:text:0c77f36d3441#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "scripts/install.sh",
+      "line_number": 104,
+      "symbol": "configure_systemd",
+      "message": "Function 'configure_systemd' (89 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:configure_systemd",
+      "fingerprint": "scripts/install.sh:HISS-04:fn:configure_systemd#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "scripts/install.sh",
+      "line_number": 175,
+      "message": "'|| true' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "fn:configure_systemd",
+      "fingerprint": "scripts/install.sh:HISS-07:fn:configure_systemd#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "scripts/uninstall.sh",
+      "line_number": 7,
+      "message": "'|| :' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "text:eb10545d4592",
+      "fingerprint": "scripts/uninstall.sh:HISS-07:text:eb10545d4592#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "scripts/uninstall.sh",
+      "line_number": 7,
+      "message": "'|| :' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "text:eb10545d4592",
+      "fingerprint": "scripts/uninstall.sh:HISS-07:text:eb10545d4592#2"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "scripts/uninstall.sh",
+      "line_number": 8,
+      "message": "'|| :' discards the command's failure; handle the exit status or test the condition instead",
+      "anchor": "text:0c77f36d3441",
+      "fingerprint": "scripts/uninstall.sh:HISS-07:text:0c77f36d3441#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "scripts/uninstall.sh",
+      "line_number": 42,
+      "message": "Unbounded loop in shell without an explicit scalar bound",
+      "anchor": "text:e06855bc5898",
+      "fingerprint": "scripts/uninstall.sh:HISS-02:text:e06855bc5898#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/cli/cases.ts",
+      "line_number": 98,
+      "symbol": "parseCase",
+      "message": "Function 'parseCase' (96 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:parseCase",
+      "fingerprint": "ui/src/cli/cases.ts:HISS-04:fn:parseCase#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "ui/src/cli/cases.ts",
+      "line_number": 220,
+      "symbol": "walk",
+      "message": "Direct recursion in walk; the call graph must form an acyclic DAG",
+      "anchor": "fn:walk",
+      "fingerprint": "ui/src/cli/cases.ts:HISS-01:fn:walk#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "ui/src/cli/docsAgent.ts",
+      "line_number": 48,
+      "message": "process.exit ends the process from library code; return an error to the entry point instead",
+      "anchor": "fn:die",
+      "fingerprint": "ui/src/cli/docsAgent.ts:HISS-07:fn:die#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/cli/docsAgent.ts",
+      "line_number": 206,
+      "symbol": "runOnce",
+      "message": "Function 'runOnce' (88 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:runOnce",
+      "fingerprint": "ui/src/cli/docsAgent.ts:HISS-04:fn:runOnce#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/cli/docsAgent.ts",
+      "line_number": 331,
+      "symbol": "cmdEval",
+      "message": "Function 'cmdEval' (162 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:cmdEval",
+      "fingerprint": "ui/src/cli/docsAgent.ts:HISS-04:fn:cmdEval#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/cli/docsAgent.ts",
+      "line_number": 494,
+      "symbol": "cmdJudge",
+      "message": "Function 'cmdJudge' (75 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:cmdJudge",
+      "fingerprint": "ui/src/cli/docsAgent.ts:HISS-04:fn:cmdJudge#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/cli/grade.ts",
+      "line_number": 49,
+      "symbol": "gradeRun",
+      "message": "Function 'gradeRun' (68 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:gradeRun",
+      "fingerprint": "ui/src/cli/grade.ts:HISS-04:fn:gradeRun#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/cli/history.ts",
+      "line_number": 176,
+      "symbol": "renderNarrative",
+      "message": "Function 'renderNarrative' (79 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:renderNarrative",
+      "fingerprint": "ui/src/cli/history.ts:HISS-04:fn:renderNarrative#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "ui/src/cli/history.ts",
+      "line_number": 269,
+      "message": "Empty catch block swallows the error; handle, rethrow or wrap it",
+      "anchor": "fn:recordRun",
+      "fingerprint": "ui/src/cli/history.ts:HISS-07:fn:recordRun#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/cli/report.ts",
+      "line_number": 84,
+      "symbol": "formatFailureReport",
+      "message": "Function 'formatFailureReport' (69 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:formatFailureReport",
+      "fingerprint": "ui/src/cli/report.ts:HISS-04:fn:formatFailureReport#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/components/ActivityTable.svelte",
+      "line_number": 340,
+      "symbol": "buildColumns",
+      "message": "Function 'buildColumns' (121 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:buildColumns",
+      "fingerprint": "ui/src/components/ActivityTable.svelte:HISS-04:fn:buildColumns#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "ui/src/components/CaptureDialog.svelte",
+      "line_number": 103,
+      "message": "Empty catch block swallows the error; handle, rethrow or wrap it",
+      "anchor": "fn:parseSSEChat",
+      "fingerprint": "ui/src/components/CaptureDialog.svelte:HISS-07:fn:parseSSEChat#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "ui/src/components/playground/ChatInterface.svelte",
+      "line_number": 158,
+      "message": "Empty catch block swallows the error; handle, rethrow or wrap it",
+      "anchor": "fn:save",
+      "fingerprint": "ui/src/components/playground/ChatInterface.svelte:HISS-07:fn:save#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/components/playground/ConcurrencyInterface.svelte",
+      "line_number": 198,
+      "symbol": "runOne",
+      "message": "Function 'runOne' (92 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:runOne",
+      "fingerprint": "ui/src/components/playground/ConcurrencyInterface.svelte:HISS-04:fn:runOne#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "ui/src/components/playground/DocsInterface.svelte",
+      "line_number": 234,
+      "message": "Empty catch block swallows the error; handle, rethrow or wrap it",
+      "anchor": "fn:save",
+      "fingerprint": "ui/src/components/playground/DocsInterface.svelte:HISS-07:fn:save#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/components/playground/DocsInterface.svelte",
+      "line_number": 360,
+      "symbol": "runAgentTurn",
+      "message": "Function 'runAgentTurn' (105 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:runAgentTurn",
+      "fingerprint": "ui/src/components/playground/DocsInterface.svelte:HISS-04:fn:runAgentTurn#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/lib/agentLoop.ts",
+      "line_number": 109,
+      "symbol": "runAgent",
+      "message": "Function 'runAgent' (126 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:runAgent",
+      "fingerprint": "ui/src/lib/agentLoop.ts:HISS-04:fn:runAgent#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/lib/ansi.ts",
+      "line_number": 54,
+      "symbol": "applySgr",
+      "message": "Function 'applySgr' (71 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:applySgr",
+      "fingerprint": "ui/src/lib/ansi.ts:HISS-04:fn:applySgr#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "ui/src/lib/chatApi.ts",
+      "line_number": 375,
+      "message": "Unbounded loop in JavaScript without an explicit scalar bound",
+      "anchor": "fn:parseChatCompletionsStream",
+      "fingerprint": "ui/src/lib/chatApi.ts:HISS-02:fn:parseChatCompletionsStream#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "ui/src/lib/chatApi.ts",
+      "line_number": 423,
+      "message": "Unbounded loop in JavaScript without an explicit scalar bound",
+      "anchor": "fn:parseMessagesStream",
+      "fingerprint": "ui/src/lib/chatApi.ts:HISS-02:fn:parseMessagesStream#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "ui/src/lib/chatApi.ts",
+      "line_number": 458,
+      "message": "Empty catch block swallows the error; handle, rethrow or wrap it",
+      "anchor": "fn:parseMessagesStream",
+      "fingerprint": "ui/src/lib/chatApi.ts:HISS-07:fn:parseMessagesStream#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "ui/src/lib/chatApi.ts",
+      "line_number": 471,
+      "message": "Unbounded loop in JavaScript without an explicit scalar bound",
+      "anchor": "fn:parseResponsesStream",
+      "fingerprint": "ui/src/lib/chatApi.ts:HISS-02:fn:parseResponsesStream#1"
+    },
+    {
+      "rule_id": "HISS-07",
+      "file_path": "ui/src/lib/chatApi.ts",
+      "line_number": 501,
+      "message": "Empty catch block swallows the error; handle, rethrow or wrap it",
+      "anchor": "fn:parseResponsesStream",
+      "fingerprint": "ui/src/lib/chatApi.ts:HISS-07:fn:parseResponsesStream#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/lib/generationStats.ts",
+      "line_number": 69,
+      "symbol": "currentStats",
+      "message": "Function 'currentStats' (81 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:currentStats",
+      "fingerprint": "ui/src/lib/generationStats.ts:HISS-04:fn:currentStats#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/lib/markdown.ts",
+      "line_number": 150,
+      "symbol": "splitCompleteBlocks",
+      "message": "Function 'splitCompleteBlocks' (66 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:splitCompleteBlocks",
+      "fingerprint": "ui/src/lib/markdown.ts:HISS-04:fn:splitCompleteBlocks#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/stores/api.ts",
+      "line_number": 61,
+      "symbol": "enableAPIEvents",
+      "message": "Function 'enableAPIEvents' (64 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:enableAPIEvents",
+      "fingerprint": "ui/src/stores/api.ts:HISS-04:fn:enableAPIEvents#1"
+    },
+    {
+      "rule_id": "HISS-04",
+      "file_path": "ui/src/stores/api.ts",
+      "line_number": 126,
+      "symbol": "handleAPIEventMessage",
+      "message": "Function 'handleAPIEventMessage' (69 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "anchor": "fn:handleAPIEventMessage",
+      "fingerprint": "ui/src/stores/api.ts:HISS-04:fn:handleAPIEventMessage#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "ui/src/stores/api.ts",
+      "line_number": 332,
+      "symbol": "fetchPlaygroundModels",
+      "message": "Direct recursion in fetchPlaygroundModels; the call graph must form an acyclic DAG",
+      "anchor": "fn:fetchPlaygroundModels",
+      "fingerprint": "ui/src/stores/api.ts:HISS-01:fn:fetchPlaygroundModels#1"
+    },
+    {
+      "rule_id": "HISS-02",
+      "file_path": "ui/src/stores/modelLogs.ts",
+      "line_number": 32,
+      "message": "Unbounded loop in JavaScript without an explicit scalar bound",
+      "anchor": "fn:run",
+      "fingerprint": "ui/src/stores/modelLogs.ts:HISS-02:fn:run#1"
+    },
+    {
+      "rule_id": "HISS-01",
+      "file_path": "internal/config/merge.go",
+      "line_number": 165,
+      "symbol": "mergeNodes",
+      "message": "Call cycle through mergeNodes -\u003e mergeValue -\u003e mergeNodes; the call graph must form an acyclic DAG",
+      "anchor": "fn:mergeNodes",
+      "fingerprint": "internal/config/merge.go:HISS-01:fn:mergeNodes#1"
+    }
+  ]
+}
