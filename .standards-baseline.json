@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generated_at": "2026-10-14T14:16:23Z",
+  "generated_at": "2026-10-16T20:19:14Z",
   "repository": "lusoris/llama-swap",
-  "commit_sha": "a2796fb0306215c6883454a8707dfb22d25c3068",
-  "total_infractions": 292,
+  "commit_sha": "4e5950100e5fa85219796ce8b185e208d9ed4eb2",
+  "total_infractions": 287,
   "infractions": [
     {
       "rule_id": "HISS-02",
@@ -1408,14 +1408,6 @@
       "fingerprint": "internal/perf/monitor_darwin.go:HISS-02:fn:tryIoreg#1"
     },
     {
-      "rule_id": "HISS-02",
-      "file_path": "internal/perf/monitor_test.go",
-      "line_number": 306,
-      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
-      "anchor": "fn:waitGpuStat",
-      "fingerprint": "internal/perf/monitor_test.go:HISS-02:fn:waitGpuStat#1"
-    },
-    {
       "rule_id": "HISS-04",
       "file_path": "internal/perf/monitor_unix.go",
       "line_number": 58,
@@ -1461,7 +1453,7 @@
     {
       "rule_id": "HISS-04",
       "file_path": "internal/perf/monitor_unix.go",
-      "line_number": 445,
+      "line_number": 441,
       "symbol": "lactGetDeviceStats",
       "message": "Function 'lactGetDeviceStats' (84 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
       "anchor": "fn:lactGetDeviceStats",
@@ -1588,59 +1580,25 @@
       "fingerprint": "internal/process/loading_progress_test.go:HISS-02:fn:TestProcessCommand_LoadingProgressExtendsTimeout#1"
     },
     {
-      "rule_id": "HISS-04",
-      "file_path": "internal/process/process_command.go",
-      "line_number": 175,
-      "symbol": "run",
-      "message": "Function 'run' (283 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
-      "anchor": "fn:ProcessCommand.run",
-      "fingerprint": "internal/process/process_command.go:HISS-04:fn:ProcessCommand.run#1"
-    },
-    {
       "rule_id": "HISS-02",
       "file_path": "internal/process/process_command.go",
-      "line_number": 235,
-      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
-      "anchor": "fn:ProcessCommand.run",
-      "fingerprint": "internal/process/process_command.go:HISS-02:fn:ProcessCommand.run#1"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": "internal/process/process_command.go",
-      "line_number": 325,
+      "line_number": 366,
       "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
-      "anchor": "fn:ProcessCommand.run",
-      "fingerprint": "internal/process/process_command.go:HISS-02:fn:ProcessCommand.run#2"
-    },
-    {
-      "rule_id": "HISS-04",
-      "file_path": "internal/process/process_command.go",
-      "line_number": 459,
-      "symbol": "doStart",
-      "message": "Function 'doStart' (189 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
-      "anchor": "fn:ProcessCommand.doStart",
-      "fingerprint": "internal/process/process_command.go:HISS-04:fn:ProcessCommand.doStart#1"
+      "anchor": "fn:lifecycle.onStart",
+      "fingerprint": "internal/process/process_command.go:HISS-02:fn:lifecycle.onStart#1"
     },
     {
       "rule_id": "HISS-02",
       "file_path": "internal/process/process_command.go",
-      "line_number": 526,
+      "line_number": 581,
       "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
-      "anchor": "fn:ProcessCommand.doStart",
-      "fingerprint": "internal/process/process_command.go:HISS-02:fn:ProcessCommand.doStart#1"
+      "anchor": "fn:ProcessCommand.newUpstreamCmd",
+      "fingerprint": "internal/process/process_command.go:HISS-02:fn:ProcessCommand.newUpstreamCmd#1"
     },
     {
       "rule_id": "HISS-02",
       "file_path": "internal/process/process_command.go",
-      "line_number": 595,
-      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
-      "anchor": "fn:ProcessCommand.doStart",
-      "fingerprint": "internal/process/process_command.go:HISS-02:fn:ProcessCommand.doStart#2"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": "internal/process/process_command.go",
-      "line_number": 665,
+      "line_number": 819,
       "message": "exec.Command takes no context, so no deadline bounds it; use exec.CommandContext",
       "anchor": "fn:ProcessCommand.sendStopSignal",
       "fingerprint": "internal/process/process_command.go:HISS-02:fn:ProcessCommand.sendStopSignal#1"
@@ -1648,7 +1606,7 @@
     {
       "rule_id": "HISS-07",
       "file_path": "internal/process/process_command.go",
-      "line_number": 752,
+      "line_number": 906,
       "message": "Legacy unchecked error assignment",
       "anchor": "fn:ProcessCommand.killProcess",
       "fingerprint": "internal/process/process_command.go:HISS-07:fn:ProcessCommand.killProcess#1"
@@ -1958,16 +1916,16 @@
     {
       "rule_id": "HISS-04",
       "file_path": "internal/server/server.go",
-      "line_number": 210,
+      "line_number": 214,
       "symbol": "New",
-      "message": "Function 'New' (62 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "message": "Function 'New' (63 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
       "anchor": "fn:New",
       "fingerprint": "internal/server/server.go:HISS-04:fn:New#1"
     },
     {
       "rule_id": "HISS-07",
       "file_path": "internal/server/server.go",
-      "line_number": 313,
+      "line_number": 318,
       "message": "Legacy unchecked error assignment",
       "anchor": "fn:Server.serveConfiguredVoices",
       "fingerprint": "internal/server/server.go:HISS-07:fn:Server.serveConfiguredVoices#1"
@@ -1975,9 +1933,9 @@
     {
       "rule_id": "HISS-04",
       "file_path": "internal/server/server.go",
-      "line_number": 337,
+      "line_number": 342,
       "symbol": "routes",
-      "message": "Function 'routes' (122 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
+      "message": "Function 'routes' (124 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
       "anchor": "fn:Server.routes",
       "fingerprint": "internal/server/server.go:HISS-04:fn:Server.routes#1"
     },
