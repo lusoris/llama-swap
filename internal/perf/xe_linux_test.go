@@ -116,6 +116,7 @@ func TestPerf_ReadXeDevices_MeasuredOnlyUnreadableOmitted(t *testing.T) {
 	s := stats[0]
 	assert.Equal(t, 1, s.ID)
 	assert.Equal(t, "0000:03:00.0", s.UUID)
+	assert.Equal(t, VendorIntel, s.Vendor)
 	assert.Equal(t, "Intel GPU 0xe20b (xe)", s.Name)
 	assert.Equal(t, 3*1024, s.MemUsedMB)
 	assert.Equal(t, 12*1024, s.MemTotalMB)

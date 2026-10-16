@@ -520,6 +520,7 @@ func TestParseNvidiaSmiLine_ValidLine(t *testing.T) {
 	stat := ParseNvidiaSmiLine(line)
 	require.NotNil(t, stat)
 
+	assert.Equal(t, VendorNVIDIA, stat.Vendor)
 	assert.Equal(t, 0, stat.ID)
 	assert.Equal(t, "NVIDIA GeForce RTX 3080", stat.Name)
 	assert.Equal(t, "GPU-12345678-1234-1234-1234-123456789abc", stat.UUID)
@@ -599,4 +600,52 @@ func TestParseIoregOutput_MissingModel(t *testing.T) {
 	assert.Equal(t, "Apple GPU", stat.Name)
 	assert.Equal(t, 50.0, stat.GpuUtilPct)
 	assert.Equal(t, 1, stat.MemUsedMB)
+}
+
+func TestPerf_AppleGpuLeavesVendorEmpty(t *testing.T) {
+	mactopLine := `{"system_info":{"name":"Apple M1 Max","gpu_core_count":32},"soc_metrics":{"gpu_power":5.5,"gpu_temp":45.0},"memory":{"total":68719476736,"used":17179869184},"gpu_usage":25.0}`
+	stat := ParseMactopLine(mactopLine)
+	require.NotNil(t, stat)
+	assert.Empty(t, stat.Vendor)
+
+	ioregStat := ParseIoregOutput([]byte(ioregSample), 32768)
+	require.NotNil(t, ioregStat)
+	assert.Empty(t, ioregStat.Vendor)
+}
+
+func TestPerf_ParseMactopLine_VramTempEdgeCases(t *testing.T) {
+	// No Memory group -> VramTempC 0.
+	lineNoMem := `{"temperatures":[{"group":"CPU","avg_celsius":50.0},{"group":"GPU","avg_celsius":48.0}]}`
+	stat := ParseMactopLine(lineNoMem)
+	require.NotNil(t, stat)
+	assert.Equal(t, 0, stat.VramTempC)
+
+	// Memory group present -> rounded temperature.
+	lineWithMem := `{"temperatures":[{"group":"Memory","avg_celsius":42.6}]}`
+	stat = ParseMactopLine(lineWithMem)
+	require.NotNil(t, stat)
+	assert.Equal(t, 43, stat.VramTempC)
+}
+
+func TestPerf_ParseMactopLine_FanSpeedEdgeCases(t *testing.T) {
+	// Fans with MaxRPM <= MinRPM are ignored.
+	lineInvalid := `{"fans":[{"rpm":2000,"min_rpm":3000,"max_rpm":3000},{"rpm":2000,"min_rpm":4000,"max_rpm":3000}]}`
+	stat := ParseMactopLine(lineInvalid)
+	require.NotNil(t, stat)
+	assert.Equal(t, 0.0, stat.FanSpeedPct)
+
+	// RPM below MinRPM clamps to 0%.
+	lineClamp := `{"fans":[{"rpm":800,"min_rpm":1000,"max_rpm":5000}]}`
+	stat = ParseMactopLine(lineClamp)
+	require.NotNil(t, stat)
+	assert.Equal(t, 0.0, stat.FanSpeedPct)
+
+	// Average over two fans (and ignoring an invalid fan).
+	// Fan 1: (3000-1000)/(5000-1000)*100 = 50%
+	// Fan 2: (4000-1000)/(5000-1000)*100 = 75%
+	// Average: (50 + 75) / 2 = 62.5%
+	lineAvg := `{"fans":[{"rpm":3000,"min_rpm":1000,"max_rpm":5000},{"rpm":4000,"min_rpm":1000,"max_rpm":5000},{"rpm":1000,"min_rpm":2000,"max_rpm":2000}]}`
+	stat = ParseMactopLine(lineAvg)
+	require.NotNil(t, stat)
+	assert.InDelta(t, 62.5, stat.FanSpeedPct, 0.001)
 }
