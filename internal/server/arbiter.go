@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/mostlygeek/llama-swap/internal/perf"
@@ -25,13 +27,20 @@ type gpuProbe struct {
 	latest func() []perf.GpuStat
 	maxAge time.Duration
 	now    func() time.Time
+	// intelGPUs lists the PCI addresses of every Intel GPU on the host; nil
+	// gives no Intel device an ordinal.
+	intelGPUs func() ([]string, error)
 }
 
 func newGpuProbe(mon *perf.Monitor, every time.Duration) gpuProbe {
 	if every <= 0 {
 		every = 5 * time.Second // performance.every default
 	}
-	p := gpuProbe{maxAge: 3 * every, now: time.Now}
+	p := gpuProbe{
+		maxAge:    3 * every,
+		now:       time.Now,
+		intelGPUs: func() ([]string, error) { return listIntelGPUs(sysPCIDevices) },
+	}
 	if mon != nil {
 		p.latest = mon.LatestGpu
 	}
@@ -47,6 +56,7 @@ func (p gpuProbe) Devices(context.Context) ([]router.Device, error) {
 		return nil, errors.New("no GPU reading yet")
 	}
 	now := p.now()
+	ordinals := p.intelOrdinals(stats)
 	devs := make([]router.Device, 0, len(stats))
 	for _, g := range stats {
 		if g.MemTotalMB <= 0 || g.MemUsedMB < 0 || g.MemUsedMB > g.MemTotalMB {
@@ -65,9 +75,46 @@ func (p gpuProbe) Devices(context.Context) ([]router.Device, error) {
 			TotalMB: g.MemTotalMB,
 			FreeMB:  g.MemTotalMB - g.MemUsedMB,
 			Sampled: g.Timestamp,
+			Vendor:  g.Vendor,
+			UUID:    g.UUID,
+			Ordinal: ordinals[strings.ToLower(g.UUID)],
 		})
 	}
 	return devs, nil
+}
+
+// intelOrdinals maps each Intel card's UUID (its PCI address) to its Level
+// Zero ordinal under ZE_ENABLE_PCI_ID_DEVICE_ORDER=1. Level Zero counts every
+// Intel GPU, so the rank by address is only right when the reading holds all
+// of the host's Intel GPUs and nothing else; the rank is taken before stale cards are left
+// out, so an omitted card never shifts the rest. When the host list cannot be
+// read or names a GPU the reading lacks (an i915 iGPU, say), no Intel device
+// gets an ordinal and placement on Intel fails closed.
+func (p gpuProbe) intelOrdinals(stats []perf.GpuStat) map[string]*int {
+	var addrs []string
+	for _, g := range stats {
+		if g.Vendor == perf.VendorIntel {
+			addrs = append(addrs, strings.ToLower(g.UUID))
+		}
+	}
+	if len(addrs) == 0 || p.intelGPUs == nil {
+		return nil
+	}
+	host, err := p.intelGPUs()
+	if err != nil || len(host) != len(addrs) {
+		return nil
+	}
+	slices.Sort(addrs)
+	for _, h := range host {
+		if _, found := slices.BinarySearch(addrs, strings.ToLower(h)); !found {
+			return nil
+		}
+	}
+	ranks := make(map[string]*int, len(addrs))
+	for i, a := range addrs {
+		ranks[a] = &i
+	}
+	return ranks
 }
 
 // arbiterLoader is the arbiter's view of the local router. Model names are

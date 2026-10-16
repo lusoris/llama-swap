@@ -144,6 +144,30 @@ func TestArbiter_Place_UnmeasuredModelFencesDevice(t *testing.T) {
 	assert.Equal(t, "gpu-b", pz.Device, "x's ready released the fence")
 }
 
+// A load that failed releases its fence without recording a footprint, so
+// the device is open again and the model stays unmeasured.
+func TestArbiter_Release_DropsFenceWithoutFootprint(t *testing.T) {
+	probe := &fakeProbe{devs: []Device{
+		{ID: "gpu-a", TotalMB: 16000, FreeMB: 10000},
+		{ID: "gpu-b", TotalMB: 24000, FreeMB: 20000},
+	}}
+	a := NewArbiter(probe)
+
+	px, err := a.Place(context.Background(), "x")
+	require.NoError(t, err)
+	require.Equal(t, "gpu-b", px.Device)
+
+	a.Release("x")
+	py, err := a.Place(context.Background(), "y")
+	require.NoError(t, err)
+	assert.Equal(t, "gpu-b", py.Device, "released fence no longer holds gpu-b")
+
+	a.Release("y")
+	px, err = a.Place(context.Background(), "x")
+	require.NoError(t, err)
+	assert.Equal(t, 0, px.NeedMB, "release records no footprint")
+}
+
 // A request for a model that is not loaded triggers one warmup and stays
 // queued; it is admitted only once the physical model reports ready.
 func TestArbiter_Admit_UnloadedModelQueuedUntilReady(t *testing.T) {

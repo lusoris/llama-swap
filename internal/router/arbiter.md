@@ -2,9 +2,11 @@
 
 Status: core implemented (`arbiter.go`, `internal/server/arbiter.go`):
 placement, footprint and fence bookkeeping, admission, and the HTTP surface.
-Not yet wired: `doSwap` does not ask `Place` for a device, and process starts
-set no visibility variable; that is the next change. Until then, which device
-a model actually lands on still follows its `cmd`.
+`VisibilityEnv` (`placement.go`) builds the per-vendor visibility variable
+for a placed device. Not yet wired: `doSwap` does not ask `Place` for a
+device, and process starts set no visibility variable; that is the next
+change. Until then, which device a model actually lands on still follows its
+`cmd`.
 
 The arbiter decides on which accelerator a model loads and when a request
 for it is admitted. It treats every accelerator on the host as one pool and
@@ -101,10 +103,20 @@ Every response carries `"api": "arbiter/v1"`.
 
 ## Wiring (next change)
 
-- `doSwap` asks `Place` for the device and passes it to the process start,
-  which sets the vendor's visibility variable (`CUDA_VISIBLE_DEVICES`,
-  `HIP_VISIBLE_DEVICES`, `ONEAPI_DEVICE_SELECTOR`, `GGML_VK_VISIBLE_DEVICES`)
-  for that one start. The model's `cmd` stays device-free.
+- `doSwap` asks `Place` for the device and passes `VisibilityEnv` of it to
+  the process start for that one start. The model's `cmd` stays device-free.
+- `VisibilityEnv` names one device for certain or fails closed with
+  `ErrUnknownVendor`:
+  - NVIDIA: `CUDA_VISIBLE_DEVICES=<nvidia-smi UUID>`.
+  - AMD: `ROCR_VISIBLE_DEVICES=<ROCm UUID "GPU-...">`. The ROCr index is not
+    used: its order is not guaranteed to match the rocm-smi card number.
+  - Intel: `ZE_ENABLE_PCI_ID_DEVICE_ORDER=1` and `ZE_AFFINITY_MASK=<ordinal>`.
+    The probe ranks Intel GPUs by PCI address, and only when every Intel
+    display-class PCI device on the host is in the reading. A GPU the reading
+    lacks (an i915 iGPU, say) would shift the Level Zero ordinals, so then
+    no Intel device gets an ordinal.
+- Until the collectors report a vendor, every device has an empty vendor and
+  placement refuses to start anything.
 - With a matrix configured, the solver still limits which evictions are
   allowed; the arbiter picks among them by measured memory.
 
