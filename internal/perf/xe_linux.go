@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -136,6 +137,7 @@ func readXeDevices(sysRoot, devRoot string, query xeQueryFunc) []GpuStat {
 		}
 
 		stats = append(stats, GpuStat{
+			Timestamp:  time.Now(),
 			ID:         c.num,
 			Name:       fmt.Sprintf("Intel GPU %s (xe)", strings.TrimSpace(string(pciDevice))),
 			UUID:       uuid,
