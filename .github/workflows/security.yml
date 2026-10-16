@@ -6,6 +6,18 @@ name: Security Scan
     - cron: '0 4 * * *'
   push:
     branches: [main]
+  # Runs on draft pull requests too: a scanner that cannot load the code
+  # must fail before the change reaches main, not after. The paths filter
+  # covers every input of the scan; it also keeps the job out of the
+  # required checks that the ruleset derives from unfiltered triggers.
+  pull_request:
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.gosec.json'
+      - '.github/tools/**'
+      - '.github/workflows/security.yml'
 
 jobs:
   vulncheck:
@@ -43,10 +55,12 @@ jobs:
             gobuild-${{ runner.os }}-${{ runner.arch }}-vulncheck-
       # yamllint enable rule:line-length
 
+      # Versions are pinned in .github/tools/go.mod. gosec v2.29.0 requires
+      # golang.org/x/tools v0.49.0, which cannot read the export data that
+      # Go 1.27 writes (pkgbits V5); the tools module raises x/tools to a
+      # version that can, so gosec type-checks every package.
       - name: Install Tools
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
+        run: go -C .github/tools install tool
       - name: Run govulncheck
         run: govulncheck ./...
       - name: Run gosec
