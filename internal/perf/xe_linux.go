@@ -85,25 +85,27 @@ func parseXeMemRegions(buf []byte) (used, total uint64, err error) {
 	return used, total, nil
 }
 
+// xeCard is one numbered DRM card directory found by readXeDevices.
+type xeCard struct {
+	num int
+	dir string
+}
+
 // readXeDevices lists the xe driven Intel GPUs under sysRoot/class/drm and
 // measures each one through query. A device whose memory cannot be read is
 // left out rather than reported with a guessed size.
 func readXeDevices(sysRoot, devRoot string, query xeQueryFunc) []GpuStat {
 	cards, _ := filepath.Glob(filepath.Join(sysRoot, "class", "drm", "card*"))
 
-	type card struct {
-		num int
-		dir string
-	}
-	var found []card
+	var found []xeCard
 	for _, dir := range cards {
 		num, err := strconv.Atoi(strings.TrimPrefix(filepath.Base(dir), "card"))
 		if err != nil {
 			continue // connector entries such as card0-DP-1
 		}
-		found = append(found, card{num: num, dir: dir})
+		found = append(found, xeCard{num: num, dir: dir})
 	}
-	slices.SortFunc(found, func(a, b card) int { return a.num - b.num })
+	slices.SortFunc(found, func(a, b xeCard) int { return a.num - b.num })
 
 	stats := make([]GpuStat, 0, len(found))
 	for _, c := range found {
@@ -138,6 +140,7 @@ func readXeDevices(sysRoot, devRoot string, query xeQueryFunc) []GpuStat {
 
 		stats = append(stats, GpuStat{
 			Timestamp:  time.Now(),
+			Vendor:     VendorIntel,
 			ID:         c.num,
 			Name:       fmt.Sprintf("Intel GPU %s (xe)", strings.TrimSpace(string(pciDevice))),
 			UUID:       uuid,

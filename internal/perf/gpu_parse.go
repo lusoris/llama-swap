@@ -35,6 +35,7 @@ func ParseNvidiaSmiLine(line string) *GpuStat {
 
 	return &GpuStat{
 		Timestamp:   time.Now(),
+		Vendor:      VendorNVIDIA,
 		ID:          id,
 		Name:        name,
 		UUID:        uuid,
@@ -46,6 +47,19 @@ func ParseNvidiaSmiLine(line string) *GpuStat {
 		FanSpeedPct: fanSpeed,
 		PowerDrawW:  powerDraw,
 	}
+}
+
+// mactopFan and mactopTemp are the fan and temperature entries of mactop's
+// headless JSON output.
+type mactopFan struct {
+	RPM    int `json:"rpm"`
+	MinRPM int `json:"min_rpm"`
+	MaxRPM int `json:"max_rpm"`
+}
+
+type mactopTemp struct {
+	Group string  `json:"group"`
+	Avg   float64 `json:"avg_celsius"`
 }
 
 // mactopOutput maps the subset of mactop's headless JSON output that is
@@ -68,15 +82,8 @@ type mactopOutput struct {
 		Name         string `json:"name"`
 		GPUCoreCount int    `json:"gpu_core_count"`
 	} `json:"system_info"`
-	Fans []struct {
-		RPM    int `json:"rpm"`
-		MinRPM int `json:"min_rpm"`
-		MaxRPM int `json:"max_rpm"`
-	} `json:"fans"`
-	Temperatures []struct {
-		Group string  `json:"group"`
-		Avg   float64 `json:"avg_celsius"`
-	} `json:"temperatures"`
+	Fans         []mactopFan  `json:"fans"`
+	Temperatures []mactopTemp `json:"temperatures"`
 }
 
 // ioreg output uses ` = ` (with spaces) for top-level device properties and
@@ -140,6 +147,40 @@ func ParseIoregOutput(out []byte, memTotalMB int) *GpuStat {
 	}
 }
 
+// mactopVramTempC extracts the temperature for the "Memory" group from mactop
+// temperatures. Unified memory has no dedicated VRAM sensor; mactop exposes a
+// memory temperature group when supported. Returns 0 when absent.
+func mactopVramTempC(temps []mactopTemp) int {
+	for _, t := range temps {
+		if strings.EqualFold(t.Group, "Memory") {
+			return int(math.Round(t.Avg))
+		}
+	}
+	return 0
+}
+
+// mactopFanPct computes the average fan load across all fans as a percentage of
+// their RPM range. Fans with MaxRPM <= MinRPM are ignored. Speeds below MinRPM
+// clamp to 0%. Returns 0 when no valid fans are reported.
+func mactopFanPct(fans []mactopFan) float64 {
+	var fanSpeed float64
+	var fanCount int
+	for _, f := range fans {
+		if f.MaxRPM > f.MinRPM {
+			pct := float64(f.RPM-f.MinRPM) / float64(f.MaxRPM-f.MinRPM) * 100
+			if pct < 0 {
+				pct = 0
+			}
+			fanSpeed += pct
+			fanCount++
+		}
+	}
+	if fanCount > 0 {
+		fanSpeed /= float64(fanCount)
+	}
+	return fanSpeed
+}
+
 // ParseMactopLine parses a single line of mactop headless JSON output into a
 // GpuStat for the Apple Silicon integrated GPU. Returns nil if the line cannot
 // be parsed.
@@ -171,44 +212,17 @@ func ParseMactopLine(line string) *GpuStat {
 		name = fmt.Sprintf("%s (%d-core GPU)", name, out.SystemInfo.GPUCoreCount)
 	}
 
-	// Unified memory has no dedicated VRAM sensor; use the memory temperature
-	// group when mactop exposes it.
-	var vramTempC int
-	for _, t := range out.Temperatures {
-		if strings.EqualFold(t.Group, "Memory") {
-			vramTempC = int(math.Round(t.Avg))
-			break
-		}
-	}
-
-	// Average fan load across all fans as a percentage of their RPM range.
-	var fanSpeed float64
-	var fanCount int
-	for _, f := range out.Fans {
-		if f.MaxRPM > f.MinRPM {
-			pct := float64(f.RPM-f.MinRPM) / float64(f.MaxRPM-f.MinRPM) * 100
-			if pct < 0 {
-				pct = 0
-			}
-			fanSpeed += pct
-			fanCount++
-		}
-	}
-	if fanCount > 0 {
-		fanSpeed /= float64(fanCount)
-	}
-
 	return &GpuStat{
 		Timestamp:   time.Now(),
 		ID:          0,
 		Name:        name,
 		TempC:       int(math.Round(out.SocMetrics.GPUTemp)),
-		VramTempC:   vramTempC,
+		VramTempC:   mactopVramTempC(out.Temperatures),
 		GpuUtilPct:  out.GPUUsage,
 		MemUtilPct:  memUtil,
 		MemUsedMB:   memUsedMB,
 		MemTotalMB:  memTotalMB,
-		FanSpeedPct: fanSpeed,
+		FanSpeedPct: mactopFanPct(out.Fans),
 		PowerDrawW:  out.SocMetrics.GPUPower,
 	}
 }
