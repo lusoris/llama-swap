@@ -33,14 +33,14 @@
     "typescript": "~5.8.3",
     "vite": "^8.0.0",
     "vite-plugin-compression2": "^2.5.1",
-    "vitest": "^4.1.0",
+    "vitest": "^4.1.12",
     "yaml": "^2.9.0"
   },
   "dependencies": {
     "@tanstack/table-core": "^8.21.3",
     "chart.js": "4.5.1",
     "highlight.js": "^11.11.1",
-    "katex": "^0.16.28",
+    "katex": "^0.18.10",
     "rehype-katex": "^7.0.1",
     "rehype-stringify": "^10.0.1",
     "remark-gfm": "^4.0.1",
@@ -50,5 +50,8 @@
     "svelte-spa-router": "^4.0.1",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.1.0"
+  },
+  "overrides": {
+    "katex": "$katex"
   }
 }

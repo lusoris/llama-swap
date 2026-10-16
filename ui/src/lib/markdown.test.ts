@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import katex from "katex";
 import { renderMarkdown, escapeHtml, splitCompleteBlocks, closePendingBlock, normalizeLatexDelimiters, renderStreamingMarkdown, createStreamingCache } from "./markdown";
 
 describe("renderMarkdown", () => {
@@ -38,6 +39,19 @@ describe("renderMarkdown", () => {
   });
 
   describe("KaTeX math rendering", () => {
+    // rehype-katex renders with its own katex dependency while markdown.ts
+    // loads the stylesheet of the top-level katex. The overrides entry in
+    // package.json keeps them one version: KaTeX 0.18 renamed CSS classes.
+    it("renders with the KaTeX version whose stylesheet is loaded", () => {
+      const tex = "\\frac{a}{b} + \\sqrt{x_1^2}";
+      const classesOf = (html: string) =>
+        [...new Set([...html.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1].split(/\s+/)))].sort();
+      const rendered = classesOf(renderMarkdown(`$$\n${tex}\n$$`));
+      const direct = classesOf(katex.renderToString(tex, { displayMode: true }));
+      expect(rendered.length).toBeGreaterThan(5);
+      expect(rendered).toEqual(direct);
+    });
+
     it("renders inline math with $...$ syntax", () => {
       const result = renderMarkdown("The equation $E = mc^2$ is famous.");
       // KaTeX should convert this to HTML with katex class
