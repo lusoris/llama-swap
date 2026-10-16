@@ -120,6 +120,7 @@ func TestPerf_ReadXeDevices_MeasuredOnlyUnreadableOmitted(t *testing.T) {
 	assert.Equal(t, 3*1024, s.MemUsedMB)
 	assert.Equal(t, 12*1024, s.MemTotalMB)
 	assert.InDelta(t, 25.0, s.MemUtilPct, 0.001)
+	assert.False(t, s.Timestamp.IsZero(), "consumers drop unstamped samples as stale")
 }
 
 func TestPerf_ReadXeDevices_NoDrmClass(t *testing.T) {
