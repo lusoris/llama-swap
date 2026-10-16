@@ -336,10 +336,6 @@ func parseRocmSmiLine(header string, line string) *GpuStat {
 	return result
 }
 
-func trySysfs(ctx context.Context, every time.Duration, logger *logmon.Monitor) (chan []GpuStat, error) {
-	return nil, ErrNotImplemented
-}
-
 func lactSocketPath() string {
 	if p := os.Getenv("LACT_DAEMON_SOCKET_PATH"); p != "" {
 		if _, err := os.Stat(p); err == nil {
@@ -525,10 +521,6 @@ func lactGetDeviceStats(conn net.Conn, id string, name string, index int) (GpuSt
 		FanSpeedPct: fanSpeed,
 		PowerDrawW:  powerDraw,
 	}, nil
-}
-
-func readSysfs() ([]GpuStat, error) {
-	return nil, ErrNotImplemented
 }
 
 func readSysStats() (SysStat, error) {

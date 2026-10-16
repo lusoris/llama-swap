@@ -300,10 +300,13 @@ func newGpuTestMonitor(t *testing.T, f *fakeGpuCollector) (*Monitor, chan []GpuS
 	return m, gpuCh
 }
 
+// maxGpuStatReads bounds waitGpuStat; the fakes publish a handful of samples.
+const maxGpuStatReads = 1000
+
 func waitGpuStat(t *testing.T, gpuCh chan []GpuStat, wantID int) {
 	t.Helper()
 	deadline := time.After(2 * time.Second)
-	for {
+	for range maxGpuStatReads {
 		select {
 		case g := <-gpuCh:
 			if len(g) == 1 && g[0].ID == wantID {
@@ -313,6 +316,24 @@ func waitGpuStat(t *testing.T, gpuCh chan []GpuStat, wantID int) {
 			t.Fatalf("timed out waiting for GPU stats from collector %d", wantID)
 		}
 	}
+	t.Fatalf("no GPU stats from collector %d in %d samples", wantID, maxGpuStatReads)
+}
+
+// waitGpuRing waits until the monitor's GPU ring holds stats from collector
+// wantID. Unlike a subscriber channel, which drops a sample while the
+// previous one is unread, the ring keeps every sample.
+func waitGpuRing(t *testing.T, m *Monitor, wantID int) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		m.mutex.RLock()
+		defer m.mutex.RUnlock()
+		for _, g := range m.gpuRing.Slice() {
+			if len(g) == 1 && g[0].ID == wantID {
+				return true
+			}
+		}
+		return false
+	}, 2*time.Second, 5*time.Millisecond, "GPU stats from collector %d", wantID)
 }
 
 func TestStart_RestartsGpuCollectorAfterItStops(t *testing.T) {
@@ -403,14 +424,16 @@ func TestStart_GpuRestartWaitResetsAfterStats(t *testing.T) {
 		{stayOpen: false}, // delivers stats, so the wait starts over
 		{noSample: true},
 	}}
-	m, gpuCh := newGpuTestMonitor(t, f)
+	m, _ := newGpuTestMonitor(t, f)
 
 	m.Start()
 	defer m.Stop()
 
-	waitGpuStat(t, gpuCh, 1)
-	waitGpuStat(t, gpuCh, 4)
-	waitGpuStat(t, gpuCh, 6)
+	// collectors 4 and 6 publish back to back, so read the ring: the
+	// subscriber channel holds one sample and drops the next
+	waitGpuRing(t, m, 1)
+	waitGpuRing(t, m, 4)
+	waitGpuRing(t, m, 6)
 	assert.Equal(t, []time.Duration{
 		5 * time.Second,
 		10 * time.Second,
