@@ -1,6 +1,10 @@
 # Accelerator arbiter
 
-Status: design, awaiting API decision (CUT-1632-11).
+Status: core implemented (`arbiter.go`, `internal/server/arbiter.go`):
+placement, footprint and fence bookkeeping, admission, and the HTTP surface.
+Not yet wired: `doSwap` does not ask `Place` for a device, and process starts
+set no visibility variable; that is the next change. Until then, which device
+a model actually lands on still follows its `cmd`.
 
 The arbiter decides on which accelerator a model loads and when a request
 for it is admitted. It treats every accelerator on the host as one pool and
@@ -59,78 +63,43 @@ never probes a local model by loading it. Health of peers (circuit breaker,
 half-open probe, `X-Llamaswap-Error` header) stays in the failover selector
 design for upstream issue 945; it is not part of placement.
 
-## Exported API sketch
+## In-process API
 
 The package is `internal/`, so other repositories cannot import it. Consumers
 (Aegis-OS lictor, praetor, epitrop, qdo) reach it over HTTP; the Go types
 below are the in-process API and the shape of the JSON.
 
 ```go
-// Device is one accelerator as measured at one instant.
-type Device struct {
-	ID      string    // stable key: UUID, else PCI address
-	Vendor  string    // from internal/hw; selects the visibility env var
-	TotalMB int
-	FreeMB  int       // measured; never defaulted
-	Sampled time.Time
-}
-
-// MemoryProbe reads the pool. An unreadable device is omitted; an error
-// means the whole reading is unusable and admission closes.
 type MemoryProbe interface {
-	Devices(ctx context.Context) ([]Device, error)
+	Devices(ctx context.Context) ([]Device, error) // unreadable device omitted
+}
+type ModelLoader interface {
+	ModelState(model string) (process.ProcessState, bool)
+	Warm(model string, done func(error))
 }
 
-// Resident is a loaded or loading model.
-type Resident struct {
-	Model    string
-	Device   string
-	State    process.ProcessState
-	InFlight int
-	Since    time.Time
-}
-
-type Placement struct {
-	Model  string
-	Device string   // chosen device ID
-	Evict  []string // models to stop first, possibly empty
-	NeedMB int      // footprint used for the decision; 0 = unmeasured, fenced
-}
-
-var (
-	ErrProbe = errors.New("arbiter: accelerator memory unreadable") // fail closed
-	ErrNoFit = errors.New("arbiter: no device fits")                // request stays queued
-)
-
-type Arbiter struct{ /* probe, footprints, residency, fences */ }
-
-func NewArbiter(probe MemoryProbe, opts Options) *Arbiter
-
-// Place picks a device and evictions for model given the residents.
-func (a *Arbiter) Place(ctx context.Context, model string, residents []Resident) (Placement, error)
-
-// Loaded records a model reaching ready on dev; updates footprint and fence.
-func (a *Arbiter) Loaded(model, dev string, before, after Device, loadTime time.Duration)
-
-// Admission is the verdict for one request.
-type Admission int
-
-const (
-	Admitted Admission = iota // physical model ready
-	Queued                    // load triggered or in flight
-	Closed                    // ErrProbe or hard load failure
-)
-
-func (a *Arbiter) Admit(ctx context.Context, model string, state func(string) (process.ProcessState, bool)) (Admission, error)
+func NewArbiter(probe MemoryProbe) *Arbiter
+func (a *Arbiter) Pool(ctx context.Context) ([]Device, error)        // empty or error: ErrProbe
+func (a *Arbiter) Place(ctx context.Context, model string) (Placement, error) // ErrProbe, ErrNoFit
+func (a *Arbiter) Loaded(model, device string, usedDeltaMB int)
+func (a *Arbiter) Admit(ctx context.Context, model string, l ModelLoader) (Verdict, error)
 ```
+
+Evictions stay with the existing `scheduler.Swapper`; `Place` only picks
+among devices that already have room.
 
 HTTP surface (read and admit only):
 
-- `GET /api/arbiter/pool` returns `[]Device` plus residents.
-- `POST /api/arbiter/admit {"model": "..."}` returns 200 `Admitted`, 202
-  `Queued` with queue position, 503 `Closed` with the reason.
+Every response carries `"api": "arbiter/v1"`.
 
-## Wiring
+- `GET /api/arbiter/pool` returns `devices` (measured, fresh within three
+  `performance.every` intervals) and `residents` (model states); 503 when
+  nothing is measured.
+- `POST /api/arbiter/admit {"model": "..."}` returns 200 `admitted`, 202
+  `queued` with `position`, 503 `closed` with the reason, 404 for an unknown
+  model.
+
+## Wiring (next change)
 
 - `doSwap` asks `Place` for the device and passes it to the process start,
   which sets the vendor's visibility variable (`CUDA_VISIBLE_DEVICES`,
