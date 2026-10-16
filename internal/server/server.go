@@ -72,6 +72,10 @@ type Server struct {
 	local router.LocalRouter
 	peer  router.Router
 
+	// arbiter places models across the measured accelerator pool and admits
+	// requests once the physical model is ready (/api/arbiter/*).
+	arbiter *router.Arbiter
+
 	mux     *http.ServeMux
 	handler http.Handler
 
@@ -247,6 +251,7 @@ func New(cfg config.Config, logs *logmon.Group, perfMon *perf.Monitor, st store.
 		activeProfile: cfg.Hooks.OnStartup.Profile,
 		local:         local,
 		peer:          peer,
+		arbiter:       router.NewArbiter(newGpuProbe(perfMon, cfg.Performance.Every)),
 		shutdownCtx:   shutdownCtx,
 		shutdownFn:    shutdownFn,
 	}
@@ -446,6 +451,8 @@ func (s *Server) routes() {
 	mux.Handle("GET /api/hardware", apiChain.ThenFunc(s.handleAPIHardware))
 	mux.Handle("GET /api/tailcat", apiChain.ThenFunc(s.handleAPITailcat))
 	mux.Handle("GET /api/captures/{id}", apiChain.ThenFunc(s.handleAPICapture))
+	mux.Handle("GET /api/arbiter/pool", apiChain.ThenFunc(s.handleAPIArbiterPool))
+	mux.Handle("POST /api/arbiter/admit", apiChain.ThenFunc(s.handleAPIArbiterAdmit))
 
 	// Stateless MCP server exposing llama-swap's own documentation as tools,
 	// consumed by the Playground's agentic chat and by any external MCP client.
