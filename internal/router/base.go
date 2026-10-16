@@ -113,11 +113,12 @@ func (b *baseRouter) notifyProcessed() {
 func (b *baseRouter) run() {
 	defer close(b.runDone)
 
-	for {
+	// The loop ends only through the shutdown case below.
+	for running := true; running; {
 		select {
 		case req := <-b.shutdownCh:
 			b.handleShutdown(req)
-			return
+			running = false
 
 		case req := <-b.handlerCh:
 			b.schedule.OnRequest(req)
@@ -480,17 +481,7 @@ func (b *baseRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// immediately after this readiness check; dropping that websocket is the
 	// intended tradeoff of opting out of lifecycle tracking.
 	if swaputil.ShouldIgnoreWebsocket(req, b.config) {
-		p, ok := b.processes[data.ModelID]
-		if !ok {
-			swaputil.SendError(w, req, scheduler.ErrModelNotFound)
-			return
-		}
-		if p.State() != process.StateReady {
-			swaputil.SendResponse(w, req, http.StatusConflict,
-				fmt.Sprintf("model %s is not loaded; ignored websocket requests cannot start it", data.ModelID))
-			return
-		}
-		p.ServeHTTP(w, req)
+		b.serveIgnoredWebsocket(w, req, data.ModelID)
 		return
 	}
 
@@ -505,15 +496,60 @@ func (b *baseRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		PositionCh: make(chan int, 1),
 	}
 
-	select {
-	case b.handlerCh <- hr:
-	case <-req.Context().Done():
+	if !b.submitRequest(w, req, hr) {
 		return
-	case <-b.shutdownCtx.Done():
-		swaputil.SendError(w, req, fmt.Errorf("%s is shutting down", b.name))
+	}
+	if !b.awaitAdmission(w, req, hr) {
 		return
 	}
 
+	ls := b.startLoading(w, req, data, hr)
+	resp, ok := b.awaitResponse(w, req, hr, ls)
+	if !ok {
+		return
+	}
+
+	if resp.Err != nil {
+		ls.reportError(w, req, resp.Err)
+		return
+	}
+	resp.HandleFunc(w, req)
+}
+
+// serveIgnoredWebsocket proxies an ignored websocket straight to its ready
+// process, outside the scheduler.
+func (b *baseRouter) serveIgnoredWebsocket(w http.ResponseWriter, req *http.Request, modelID string) {
+	p, ok := b.processes[modelID]
+	if !ok {
+		swaputil.SendError(w, req, scheduler.ErrModelNotFound)
+		return
+	}
+	if p.State() != process.StateReady {
+		swaputil.SendResponse(w, req, http.StatusConflict,
+			fmt.Sprintf("model %s is not loaded; ignored websocket requests cannot start it", modelID))
+		return
+	}
+	p.ServeHTTP(w, req)
+}
+
+// submitRequest hands hr to the run loop. It reports false when ServeHTTP must
+// return: the client left or the router is shutting down.
+func (b *baseRouter) submitRequest(w http.ResponseWriter, req *http.Request, hr scheduler.HandlerReq) bool {
+	select {
+	case b.handlerCh <- hr:
+		return true
+	case <-req.Context().Done():
+		return false
+	case <-b.shutdownCtx.Done():
+		swaputil.SendError(w, req, fmt.Errorf("%s is shutting down", b.name))
+		return false
+	}
+}
+
+// awaitAdmission waits for the scheduler's admission verdict on hr. It reports
+// false when ServeHTTP must return: the client left, the router is shutting
+// down, or admission was refused.
+func (b *baseRouter) awaitAdmission(w http.ResponseWriter, req *http.Request, hr scheduler.HandlerReq) bool {
 	var admissionErr error
 	select {
 	case admissionErr = <-hr.Admit:
@@ -522,80 +558,99 @@ func (b *baseRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		case b.cancelCh <- hr:
 		case <-b.shutdownCtx.Done():
 		}
-		return
+		return false
 	case <-b.shutdownCtx.Done():
 		swaputil.SendError(w, req, fmt.Errorf("%s is shutting down", b.name))
-		return
+		return false
 	}
 	if admissionErr != nil {
 		swaputil.SendError(w, req, admissionErr)
-		return
+		return false
 	}
+	return true
+}
 
+// loadStream is the optional "loading" SSE stream shown to a streaming client
+// while its model swaps in. The zero lw (nil) is the no-stream case.
+type loadStream struct {
+	lw     *loadingWriter
+	cancel context.CancelFunc
+}
+
+// startLoading starts the loading stream when the request asks for it and the
+// model is not ready yet.
+func (b *baseRouter) startLoading(w http.ResponseWriter, req *http.Request, data swaputil.ReqContextData, hr scheduler.HandlerReq) *loadStream {
 	isModelReady := false
 	if p, ok := b.processes[data.ModelID]; ok {
 		isModelReady = p.State() == process.StateReady
 	}
 	shouldShowLoading := data.Streaming && data.SendLoadingState && isLoadingPath(req.URL.Path) && !isModelReady
 
-	var lw *loadingWriter
-	cancelLoad := func() {}
+	ls := &loadStream{cancel: func() {}}
 	if shouldShowLoading {
 		var swapCtx context.Context
-		swapCtx, cancelLoad = context.WithCancel(req.Context())
-		lw = newLoadingWriter(b.logger, data.ModelID, w, req)
-		go lw.start(swapCtx)
-		go func() {
-			for {
-				select {
-				case pos := <-hr.PositionCh:
-					lw.setUpdate(fmt.Sprintf("Queue position: #%d", pos))
-				case <-swapCtx.Done():
-					return
-				}
-			}
-		}()
+		swapCtx, ls.cancel = context.WithCancel(req.Context())
+		ls.lw = newLoadingWriter(b.logger, data.ModelID, w, req)
+		go ls.lw.start(swapCtx)
+		go ls.forwardPositions(swapCtx, hr.PositionCh)
 	}
+	return ls
+}
 
-	// finishLoading stops the loading stream and fences its goroutine off from
-	// the ResponseWriter before the real handler (or ServeHTTP's return)
-	// reclaims it. release() must run even when waitForCompletion times out:
-	// otherwise a still-streaming goroutine flushes a finalized response and
-	// panics on the recycled *bufio.Writer.
-	//
-	// A non-nil streamErr is framed into the stream first, while writes still
-	// reach the client: the 200 is already committed, so this is the only way
-	// the error can be reported at all.
-	finishLoading := func(streamErr error) {
-		cancelLoad()
-		if lw != nil {
-			lw.waitForCompletion(1 * time.Second)
-			if streamErr != nil {
-				lw.sendError(streamErr)
-			}
-			lw.release()
+// forwardPositions relays queue positions into the loading stream until ctx
+// ends.
+func (ls *loadStream) forwardPositions(ctx context.Context, positions <-chan int) {
+	for ctx.Err() == nil {
+		select {
+		case pos := <-positions:
+			ls.lw.setUpdate(fmt.Sprintf("Queue position: #%d", pos))
+		case <-ctx.Done():
 		}
 	}
+}
 
-	// reportError sends err as a normal error response, for the paths where no
-	// loading stream was live to carry it in-band. When one was, finishLoading
-	// has already framed it into the stream and a second report would append a
-	// bare JSON line that SSE parsers discard.
-	reportError := func(err error) {
-		if lw == nil {
-			swaputil.SendError(w, req, err)
+// finish stops the loading stream and fences its goroutine off from the
+// ResponseWriter before the real handler (or ServeHTTP's return) reclaims it.
+// release() must run even when waitForCompletion times out: otherwise a
+// still-streaming goroutine flushes a finalized response and panics on the
+// recycled *bufio.Writer.
+//
+// A non-nil streamErr is framed into the stream first, while writes still
+// reach the client: the 200 is already committed, so this is the only way
+// the error can be reported at all.
+func (ls *loadStream) finish(streamErr error) {
+	ls.cancel()
+	if ls.lw != nil {
+		ls.lw.waitForCompletion(1 * time.Second)
+		if streamErr != nil {
+			ls.lw.sendError(streamErr)
 		}
+		ls.lw.release()
 	}
+}
 
+// reportError sends err as a normal error response, for the paths where no
+// loading stream was live to carry it in-band. When one was, finish has
+// already framed it into the stream and a second report would append a
+// bare JSON line that SSE parsers discard.
+func (ls *loadStream) reportError(w http.ResponseWriter, req *http.Request, err error) {
+	if ls.lw == nil {
+		swaputil.SendError(w, req, err)
+	}
+}
+
+// awaitResponse waits for the scheduler to grant hr. It reports false when
+// ServeHTTP must return: the client left or the router is shutting down.
+func (b *baseRouter) awaitResponse(w http.ResponseWriter, req *http.Request, hr scheduler.HandlerReq, ls *loadStream) (scheduler.HandlerResp, bool) {
 	var resp scheduler.HandlerResp
 	select {
 	case resp = <-hr.Respond:
 		// Pass the dispatch error in so it is framed into the stream before
 		// release fences the writer; a nil error just ends the stream.
-		finishLoading(resp.Err)
+		ls.finish(resp.Err)
 	case <-req.Context().Done():
 		// The client is gone, so there is nobody to report to.
-		finishLoading(nil)
+		ls.finish(nil)
 		// Notify the scheduler so it can prune this request from its queue
 		// and swap waiters. Without this, a queued request whose client left
 		// would sit in the scheduler until drainQueue eventually starts a
@@ -604,17 +659,12 @@ func (b *baseRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		case b.cancelCh <- hr:
 		case <-b.shutdownCtx.Done():
 		}
-		return
+		return resp, false
 	case <-b.shutdownCtx.Done():
 		shutdownErr := fmt.Errorf("%s is shutting down", b.name)
-		finishLoading(shutdownErr)
-		reportError(shutdownErr)
-		return
+		ls.finish(shutdownErr)
+		ls.reportError(w, req, shutdownErr)
+		return resp, false
 	}
-
-	if resp.Err != nil {
-		reportError(resp.Err)
-		return
-	}
-	resp.HandleFunc(w, req)
+	return resp, true
 }
