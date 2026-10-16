@@ -33,6 +33,19 @@ type Device struct {
 	TotalMB int       `json:"total_mb"`
 	FreeMB  int       `json:"free_mb"`
 	Sampled time.Time `json:"sampled"`
+
+	// The fields below let placement build the vendor's visibility variable
+	// for a process; see VisibilityEnv.
+
+	// Vendor is a perf.Vendor* value, or empty when the collector cannot tell.
+	Vendor string `json:"vendor,omitempty"`
+	// UUID is the collector's device UUID: the nvidia-smi UUID for NVIDIA, the
+	// ROCm UUID ("GPU-...") for AMD, the PCI address for Intel.
+	UUID string `json:"uuid,omitempty"`
+	// Ordinal is the Level Zero device ordinal under PCI-address order, set
+	// for Intel devices only and only when the probe can count every Intel
+	// GPU on the host; nil means unknown.
+	Ordinal *int `json:"ordinal,omitempty"`
 }
 
 // MemoryProbe measures the pool. A device whose memory cannot be read is
@@ -156,6 +169,14 @@ func (a *Arbiter) Loaded(model, device string, usedDeltaMB int) {
 	if usedDeltaMB > a.footprints[model] {
 		a.footprints[model] = usedDeltaMB
 	}
+}
+
+// Release drops the fence held for model without recording a footprint. It is
+// for a load that failed or whose memory could not be measured.
+func (a *Arbiter) Release(model string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	delete(a.fences, model)
 }
 
 // Admit decides one request for model. A probe error closes admission before

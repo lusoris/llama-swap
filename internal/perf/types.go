@@ -2,8 +2,19 @@ package perf
 
 import "time"
 
+// GPU vendors a collector can name. An empty Vendor means the collector cannot
+// tell, and placement refuses to start a process on such a device.
+const (
+	VendorNVIDIA = "nvidia"
+	VendorAMD    = "amd"
+	VendorIntel  = "intel"
+)
+
 type GpuStat struct {
 	Timestamp time.Time `json:"timestamp"`
+
+	// Vendor is one of the Vendor constants, or empty when unknown.
+	Vendor string `json:"vendor,omitempty"`
 
 	ID          int     `json:"id"`
 	Name        string  `json:"name"`
