@@ -66,7 +66,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/muesli/reflow v0.2.1-0.20210115123740-9e1d0d53df68 // indirect
 	github.com/muesli/termenv v0.15.1 // indirect
-	github.com/nwaples/rardecode/v2 v2.1.0 // indirect
+	github.com/nwaples/rardecode/v2 v2.4.5 // indirect
 	github.com/openai/openai-go/v3 v3.52.0 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
@@ -92,7 +92,7 @@ require (
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
-	github.com/ulikunitz/xz v0.5.12 // indirect
+	github.com/ulikunitz/xz v0.5.17 // indirect
 	github.com/wasilibs/go-re2 v1.9.0 // indirect
 	github.com/wasilibs/wazero-helpers v0.0.0-20240620070341-3dff1577cd52 // indirect
 	github.com/xo/terminfo v1.0.0 // indirect
