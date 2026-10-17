@@ -1,0 +1,15 @@
+---
+# HISS-08 (determinism): no shell evaluating a command string in Go.
+# Fixture: .github/scripts/semgrep-selftest.sh plants one per rule file.
+rules:
+  - id: hiss-08-go-shell-command
+    patterns:
+      - pattern-either:
+          - pattern: exec.Command($SH, "-c", ...)
+          - pattern: exec.CommandContext($CTX, $SH, "-c", ...)
+      - metavariable-regex:
+          metavariable: $SH
+          regex: ^"(/bin/|/usr/bin/)?(sh|bash|dash|zsh)"$
+    message: "[HISS-08] a shell evaluates this string. fix: pass the program and its arguments as a list."
+    languages: [go]
+    severity: ERROR

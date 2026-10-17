@@ -1,0 +1,20 @@
+---
+# HISS-08 (determinism): no code built from a string in TypeScript.
+# Fixture: .github/scripts/semgrep-selftest.sh plants one per rule file.
+rules:
+  - id: hiss-08-ts-eval
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+      - pattern: Function(...)
+    message: "[HISS-08] eval and Function build code from a string. fix: parse the data or call the function directly."
+    languages: [typescript, javascript]
+    severity: ERROR
+
+  - id: hiss-08-ts-string-timer
+    pattern-either:
+      - pattern: setTimeout("...", ...)
+      - pattern: setInterval("...", ...)
+    message: "[HISS-08] a string passed to a timer is evaluated as code. fix: pass a function."
+    languages: [typescript, javascript]
+    severity: ERROR

@@ -1,0 +1,12 @@
+---
+# HISS-08 (determinism): no code built from a string in Svelte. semgrep has
+# no Svelte parser, so this is a text rule.
+# Fixture: .github/scripts/semgrep-selftest.sh plants one per rule file.
+rules:
+  - id: hiss-08-svelte-eval
+    pattern-regex: \b(eval|(new\s+)?Function)\s*\(|\bset(Timeout|Interval)\s*\(\s*["'`]
+    paths:
+      include: ["*.svelte"]
+    message: "[HISS-08] eval, Function and string timers build code from a string. fix: parse the data or call the function directly."
+    languages: [generic]
+    severity: ERROR

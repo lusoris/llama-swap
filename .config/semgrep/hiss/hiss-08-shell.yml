@@ -1,0 +1,12 @@
+---
+# HISS-08 (determinism): no eval in shell. semgrep skips shell lines it
+# cannot parse, so this is a text rule.
+# Fixture: .github/scripts/semgrep-selftest.sh plants one per rule file.
+rules:
+  - id: hiss-08-shell-eval
+    pattern-regex: (^|[;&|(]|\bthen|\bdo|\belse)[ \t]*eval\b
+    paths:
+      include: ["*.sh", "*.bash"]
+    message: "[HISS-08] eval prohibited. fix: build an argument array."
+    languages: [generic]
+    severity: ERROR

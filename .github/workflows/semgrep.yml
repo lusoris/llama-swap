@@ -1,0 +1,50 @@
+---
+name: Semgrep
+
+'on':
+  push:
+    branches: [main]
+  # The paths filter covers every input of the check; it also keeps the job
+  # out of the required checks that the ruleset derives from unfiltered
+  # triggers.
+  pull_request:
+    paths:
+      - '**.go'
+      - '**.ts'
+      - '**.js'
+      - '**.svelte'
+      - '**.sh'
+      - '**.bash'
+      - '.semgrepignore'
+      - '.config/semgrep/**'
+      - '.github/scripts/semgrep-selftest.sh'
+      - '.github/tools/requirements-semgrep.txt'
+      - '.github/workflows/semgrep.yml'
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      # The version is pinned in .github/tools/requirements-semgrep.txt; the
+      # venv lives in the runner's temp folder, never a shared location.
+      - name: Install Tools
+        run: |
+          python -m venv "$RUNNER_TEMP/semgrep"
+          "$RUNNER_TEMP/semgrep/bin/pip" install --quiet \
+            -r .github/tools/requirements-semgrep.txt
+          echo "$RUNNER_TEMP/semgrep/bin" >> "$GITHUB_PATH"
+
+      # Plants the cases each rule must report and the cases it must leave
+      # alone, and fails unless every rule reports exactly the first.
+      - name: Test the rules
+        run: .github/scripts/semgrep-selftest.sh
+
+      # HISS-08: no dynamic code execution. .semgrepignore replaces the
+      # default ignore list, so tests are scanned too.
+      - name: Run semgrep
+        run: semgrep scan --config .config/semgrep/hiss --error --metrics=off --disable-version-check .
