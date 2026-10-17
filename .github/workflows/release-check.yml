@@ -1,0 +1,78 @@
+name: release-check
+
+# Builds a snapshot release with the SBOM documents whenever the release
+# configuration changes, so a broken .goreleaser.yaml fails here and not on a
+# tag push. Signing and publishing need the tag run's OIDC token and are
+# skipped; release.yml does both.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - .goreleaser.yaml
+      - .github/workflows/release.yml
+      - .github/workflows/release-check.yml
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Stop on a draft pull request
+        if: github.event.pull_request.draft == true
+        shell: bash
+        env:
+          TITLE: Gate not run on a draft
+          MESSAGE: >-
+            The gate did not run because the pull request is a draft.
+            It runs when the pull request is marked ready for review.
+        run: |
+          echo "::error title=$TITLE::$MESSAGE"
+          echo "$MESSAGE" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+      - name: Checkout
+        if: github.event.pull_request.draft != true
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Go
+        if: github.event.pull_request.draft != true
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c #6.4.0
+        with:
+          go-version-file: go.mod
+      - name: Set up Node.js
+        if: github.event.pull_request.draft != true
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
+        with:
+          node-version: "24"
+      - name: Build UI
+        if: github.event.pull_request.draft != true
+        run: |
+          make ui
+      - name: Install Syft
+        if: github.event.pull_request.draft != true
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      - name: Build the snapshot
+        if: github.event.pull_request.draft != true
+        uses: goreleaser/goreleaser-action@1a80836c5c9d9e5755a25cb59ec6f45a3b5f41a8 #7.2.1
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --snapshot --clean --skip=sign,publish
+      - name: Every archive has both SBOM documents
+        if: github.event.pull_request.draft != true
+        run: |
+          set -euo pipefail
+          n=0
+          for a in dist/*.tar.gz dist/*.zip; do
+            [ -e "$a" ] || continue
+            for d in "$a.cyclonedx.json" "$a.spdx.json"; do
+              jq -e . "$d" > /dev/null || { echo "::error::missing or invalid $d"; exit 1; }
+            done
+            n=$((n + 1))
+          done
+          [ "$n" -gt 0 ] || { echo "::error::no archives in dist"; exit 1; }
+          echo "$n archives, each with a CycloneDX and an SPDX document"

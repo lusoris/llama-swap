@@ -39,3 +39,32 @@ archives:
       - goos: windows
         formats:
           - zip
+# One CycloneDX and one SPDX document per archive, catalogued by Syft, which
+# release.yml installs; both documents are listed in the checksums file.
+sboms:
+  - id: cyclonedx
+    artifacts: archive
+    documents:
+      - "${artifact}.cyclonedx.json"
+    cmd: syft
+    args: ["$artifact", "--output", "cyclonedx-json=${document}"]
+  - id: spdx
+    artifacts: archive
+    documents:
+      - "${artifact}.spdx.json"
+    cmd: syft
+    args: ["$artifact", "--output", "spdx-json=${document}"]
+
+# Keyless cosign signature over the checksums file. cosign v3 writes one Sigstore
+# bundle holding the signature, the Fulcio certificate and the transparency-log
+# entry; ${signature} names that bundle so GoReleaser uploads it.
+signs:
+  - id: cosign-keyless
+    cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - "sign-blob"
+      - "--yes"
+      - "--bundle=${signature}"
+      - "${artifact}"
+    artifacts: checksum
