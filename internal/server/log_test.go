@@ -189,6 +189,27 @@ func TestServer_RequestLogMiddleware(t *testing.T) {
 	}
 }
 
+// logHasStatus reports whether an access log line carries status (optionally
+// followed by the byte count, e.g. "499 0") in its status field. The field
+// follows the quoted request line; a bare substring match would also hit the
+// duration, e.g. "1.009499ms".
+func logHasStatus(line, status string) bool {
+	return strings.Contains(line, "\" "+status+" ")
+}
+
+func TestServer_LogHasStatus(t *testing.T) {
+	line := `Request 127.0.0.1 "GET /v1/models HTTP/1.1" 502 0 "" 1.009499ms`
+	if !logHasStatus(line, "502") || !logHasStatus(line, "502 0") {
+		t.Errorf("logHasStatus(%q) missed the 502 status field", line)
+	}
+	if logHasStatus(line, "499") {
+		t.Errorf("logHasStatus(%q, 499) matched digits in the duration", line)
+	}
+	if logHasStatus(line, "50") {
+		t.Errorf("logHasStatus(%q, 50) matched a status prefix", line)
+	}
+}
+
 // TestServer_RequestLogMiddleware_ClientClosed covers #1029: a client that
 // hangs up before anything is written (e.g. during a cold model load) used to
 // be logged as the seeded 200, hiding aborted requests from status-code
@@ -243,10 +264,10 @@ func TestServer_RequestLogMiddleware_ClientClosed(t *testing.T) {
 			CreateRequestLogMiddleware(proxylog)(c.handler).ServeHTTP(httptest.NewRecorder(), r)
 
 			line := string(proxylog.GetHistory())
-			if !strings.Contains(line, c.want) {
+			if !logHasStatus(line, c.want) {
 				t.Errorf("log line %q missing %q", line, c.want)
 			}
-			if strings.Contains(line, c.notWant) {
+			if logHasStatus(line, c.notWant) {
 				t.Errorf("log line %q should not contain %q", line, c.notWant)
 			}
 		})
@@ -269,10 +290,10 @@ func TestServer_RequestLogMiddleware_ClientClosed(t *testing.T) {
 		CreateRequestLogMiddleware(proxylog)(handler).ServeHTTP(httptest.NewRecorder(), r)
 
 		line := string(proxylog.GetHistory())
-		if !strings.Contains(line, "200 0") {
+		if !logHasStatus(line, "200 0") {
 			t.Errorf("log line %q should keep the flushed 200", line)
 		}
-		if strings.Contains(line, "499") {
+		if logHasStatus(line, "499") {
 			t.Errorf("log line %q must not report 499 after a flushed response", line)
 		}
 	})
@@ -393,15 +414,21 @@ func TestServer_RequestLogMiddleware_WebSocketUpgrade(t *testing.T) {
 		t.Fatalf("websocket upgrade failed: status line = %q, want 101 Switching Protocols", strings.TrimSpace(statusLine))
 	}
 
-	// Drain the rest of the response headers.
-	for {
+	// Drain the rest of the response headers, bounded by maxHeaderLines.
+	const maxHeaderLines = 64
+	drained := false
+	for range maxHeaderLines {
 		line, err := br.ReadString('\n')
 		if err != nil {
 			t.Fatalf("read headers: %v", err)
 		}
 		if strings.TrimSpace(line) == "" {
+			drained = true
 			break
 		}
+	}
+	if !drained {
+		t.Fatalf("response headers exceed %d lines", maxHeaderLines)
 	}
 
 	// Verify bytes flow through the hijacked connection.

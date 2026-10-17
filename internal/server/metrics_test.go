@@ -507,7 +507,7 @@ func TestServer_MetricsMiddleware_ServerSideCancelIsNotClientClosed(t *testing.T
 	if entries[0].RespStatusCode == swaputil.StatusClientClosedRequest {
 		t.Error("a server-side cancel must not be recorded as a client disconnect")
 	}
-	if line := string(proxylog.GetHistory()); strings.Contains(line, "499") {
+	if line := string(proxylog.GetHistory()); logHasStatus(line, "499") {
 		t.Errorf("access log %q should not report 499 for a connected client", line)
 	}
 }
