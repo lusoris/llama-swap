@@ -36,6 +36,21 @@ func writeYAMLInDir(t *testing.T, dir, name, content string) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644))
 }
 
+// removeDirRetry removes dir while a watcher polls it. Windows refuses to
+// delete a directory that another goroutine holds open in os.ReadDir
+// ("being used by another process"), so retry for a bounded time.
+func removeDirRetry(t *testing.T, dir string) {
+	t.Helper()
+	var err error
+	for attempt := 0; attempt < 50; attempt++ {
+		if err = os.RemoveAll(dir); err == nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	require.NoError(t, err)
+}
+
 func TestDirWatcher_NoFireOnBaseline(t *testing.T) {
 	dir := t.TempDir()
 	writeYAMLInDir(t, dir, "a.yaml", "a")
@@ -144,7 +159,7 @@ func TestDirWatcher_MissingDirRecovers(t *testing.T) {
 	time.Sleep(testInterval * 2)
 
 	// Remove the directory. No fire expected on disappearance alone.
-	require.NoError(t, os.RemoveAll(dir))
+	removeDirRetry(t, dir)
 	time.Sleep(testInterval * 3)
 	require.Equal(t, int64(0), atomic.LoadInt64(&n), "directory removal alone must not fire")
 
