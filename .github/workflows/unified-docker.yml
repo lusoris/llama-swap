@@ -145,6 +145,19 @@ jobs:
             push="${{ inputs.push_to_ghcr }}"
           fi
 
+          # Every build pushes its per-project artifacts image to
+          # ghcr.io/mostlygeek/llama-swap-build (ARTIFACT_REPO in
+          # build-image.sh), which only mostlygeek/llama-swap can write. In a
+          # fork the push fails with permission_denied after hours of
+          # compiling, so build nothing there and say why.
+          if [[ "${GITHUB_REPOSITORY}" != "mostlygeek/llama-swap" ]]; then
+            msg="${GITHUB_REPOSITORY} cannot push to ghcr.io/mostlygeek, so no image was built; the unified images are built in mostlygeek/llama-swap."
+            echo "::notice title=Unified images not built::${msg}"
+            echo "${msg}" >> "$GITHUB_STEP_SUMMARY"
+            build_cuda=false; build_cuda13=false; build_vulkan=false
+            build_arm64=false; push=false
+          fi
+
           # cuda and vulkan are amd64 only; cuda13 adds arm64 for GB10.
           if [[ "${build_arm64}" == "true" ]]; then
             cuda13_platforms='["linux/amd64","linux/arm64"]'
