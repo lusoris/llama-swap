@@ -1,0 +1,2 @@
+# Replaces semgrep's default ignore list, which skips tests and fixtures.
+# HISS-08 binds test code too, so only files git already ignores are skipped.
