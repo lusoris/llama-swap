@@ -13,6 +13,10 @@ internal/server/ui_dist/*
 evals/docs-agent/runs/
 evals/config.yaml
 
+# Pinned tool binaries from .github/tools; install with
+# GOBIN="$PWD/.github/tools/bin" go -C .github/tools install tool
+/.github/tools/bin/
+
 # BEGIN praetor private artifacts (praetorctl adopt)
 .workingdir/
 .workingdir2/
