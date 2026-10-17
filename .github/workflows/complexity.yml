@@ -1,0 +1,57 @@
+---
+name: Complexity
+
+'on':
+  push:
+    branches: [main]
+  # The paths filter covers every input of the check; it also keeps the job
+  # out of the required checks that the ruleset derives from unfiltered
+  # triggers.
+  pull_request:
+    paths:
+      - '**.go'
+      - '.github/complexity-baseline.txt'
+      - '.github/scripts/complexity-ratchet.sh'
+      - '.github/tools/go.mod'
+      - '.github/tools/go.sum'
+      - '.github/workflows/complexity.yml'
+
+jobs:
+  complexity:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: 'go.mod'
+          # See ci.yml: setup-go's cache key carries no job name, so every job
+          # in the repository would share one build cache entry.
+          cache: false
+
+      # Versions are pinned in .github/tools/go.mod; binaries go to the
+      # git-ignored .github/tools/bin, never the shared ~/go/bin.
+      - name: Install Tools
+        run: |
+          GOBIN="$GITHUB_WORKSPACE/.github/tools/bin" go -C .github/tools install tool
+          echo "$GITHUB_WORKSPACE/.github/tools/bin" >> "$GITHUB_PATH"
+
+      # The limits are HISS-04's: cyclomatic <= 10, cognitive <= 15. The tree
+      # carries functions above them from upstream, recorded in
+      # .github/complexity-baseline.txt. Every finding is printed; a function
+      # fails the job only when it is new or scores above its baseline row.
+      # Exit status 1 means findings, so only a higher status fails here;
+      # the ratchet reads stderr for errors.
+      - name: Run gocyclo
+        run: |
+          gocyclo -over 10 . > "$RUNNER_TEMP/gocyclo.out" \
+            2> "$RUNNER_TEMP/gocyclo.err" || [ $? -eq 1 ]
+          .github/scripts/complexity-ratchet.sh gocyclo \
+            "$RUNNER_TEMP/gocyclo.out" "$RUNNER_TEMP/gocyclo.err" \
+            .github/complexity-baseline.txt
+      - name: Run gocognit
+        run: |
+          gocognit -test -over 15 . > "$RUNNER_TEMP/gocognit.out" \
+            2> "$RUNNER_TEMP/gocognit.err" || [ $? -eq 1 ]
+          .github/scripts/complexity-ratchet.sh gocognit \
+            "$RUNNER_TEMP/gocognit.out" "$RUNNER_TEMP/gocognit.err" \
+            .github/complexity-baseline.txt
