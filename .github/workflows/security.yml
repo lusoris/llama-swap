@@ -58,9 +58,12 @@ jobs:
       # Versions are pinned in .github/tools/go.mod. gosec v2.29.0 requires
       # golang.org/x/tools v0.49.0, which cannot read the export data that
       # Go 1.27 writes (pkgbits V5); the tools module raises x/tools to a
-      # version that can, so gosec type-checks every package.
+      # version that can, so gosec type-checks every package. Binaries go
+      # to the git-ignored .github/tools/bin, never the shared ~/go/bin.
       - name: Install Tools
-        run: go -C .github/tools install tool
+        run: |
+          GOBIN="$GITHUB_WORKSPACE/.github/tools/bin" go -C .github/tools install tool
+          echo "$GITHUB_WORKSPACE/.github/tools/bin" >> "$GITHUB_PATH"
       - name: Run govulncheck
         run: govulncheck ./...
       - name: Run gosec
