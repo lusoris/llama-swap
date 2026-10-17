@@ -1,6 +1,7 @@
 package docagent
 
 import (
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -265,12 +266,15 @@ func TestDocs_Doc_WindowsAndTruncates(t *testing.T) {
 	})
 
 	t.Run("max bytes truncates at a line boundary", func(t *testing.T) {
-		got, _ := d.Doc("guides/routing/first-tip", DocOptions{MaxBytes: 12})
+		got, _ := d.Doc("guides/routing/first-tip", DocOptions{MaxBytes: 20})
 		if !got.Truncated {
 			t.Error("Truncated = false, want true")
 		}
-		if len(got.Text) > 12 {
-			t.Errorf("len(Text) = %d, want <= 12", len(got.Text))
+		if len(got.Text) > 20 {
+			t.Errorf("len(Text) = %d, want <= 20", len(got.Text))
+		}
+		if got.Text == "" || !strings.HasPrefix(full.Text, got.Text+"\n") {
+			t.Errorf("Text = %q, want whole leading lines of %q", got.Text, full.Text)
 		}
 	})
 }
@@ -291,29 +295,5 @@ func TestDocs_Doc_CarriesCitation(t *testing.T) {
 	// "# beta: the second setting" is line 8 of the fixture.
 	if got.SourceLine != 8 {
 		t.Errorf("SourceLine = %d, want 8", got.SourceLine)
-	}
-}
-
-func TestCapText(t *testing.T) {
-	tests := []struct {
-		name     string
-		in       string
-		max      int
-		want     string
-		wantCapd bool
-	}{
-		{"under the cap", "abc\ndef", 100, "abc\ndef", false},
-		{"exactly the cap", "abc", 3, "abc", false},
-		{"cuts at a newline", "abcd\nefgh\nijkl", 12, "abcd\nefgh", true},
-		{"no newline to cut at", "abcdefghij", 4, "abcd", true},
-		{"zero max disables", "abcdefghij", 0, "abcdefghij", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, capped := CapText(tt.in, tt.max)
-			if got != tt.want || capped != tt.wantCapd {
-				t.Errorf("CapText(%q, %d) = (%q, %v), want (%q, %v)", tt.in, tt.max, got, capped, tt.want, tt.wantCapd)
-			}
-		})
 	}
 }

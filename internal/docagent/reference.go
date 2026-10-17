@@ -17,6 +17,8 @@ import (
 	"io/fs"
 	"sort"
 	"strings"
+
+	"github.com/mostlygeek/llama-swap/internal/mcptools"
 )
 
 // File names read from the FS. Paths are relative to the FS root, which
@@ -245,7 +247,7 @@ func (d *Docs) Doc(id string, opts DocOptions) (DocText, bool) {
 
 	body := strings.Join(doc.lines[start:end], "\n")
 	if opts.MaxBytes > 0 {
-		capped, wasCapped := CapText(body, opts.MaxBytes)
+		capped, wasCapped := mcptools.CapText(body, opts.MaxBytes)
 		if wasCapped {
 			// Recount so EndLine still points at real content.
 			end = start + strings.Count(capped, "\n") + 1
@@ -264,20 +266,6 @@ func (d *Docs) Doc(id string, opts DocOptions) (DocText, bool) {
 		SourceLine: doc.sourceLine + start,
 		Fence:      doc.fence,
 	}, true
-}
-
-// CapText truncates s at the last newline before maxBytes. It reports whether
-// anything was removed. Tool results land in a local model's context window,
-// so every path that produces one passes through here.
-func CapText(s string, maxBytes int) (string, bool) {
-	if maxBytes <= 0 || len(s) <= maxBytes {
-		return s, false
-	}
-	cut := s[:maxBytes]
-	if idx := strings.LastIndexByte(cut, '\n'); idx > 0 {
-		cut = cut[:idx]
-	}
-	return cut, true
 }
 
 func containsFold(haystack []string, needle string) bool {
