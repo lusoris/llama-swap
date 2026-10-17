@@ -1,0 +1,129 @@
+# Trivy findings accepted at adoption of the trivy job, each bound to the
+# files it was measured in. A finding of the same check in any other file,
+# and every vulnerability or secret not suppressed by
+# security/vex/go.openvex.json, fails the job. Each entry expires with the
+# adoption exceptions in .standards.yaml; fix the file or renew the entry.
+misconfigurations:
+  - id: DS-0001
+    paths:
+      - docker/llama-swap-sd.Containerfile
+    expired_at: 2027-01-12
+    statement: "inherited finding (':latest' tag used); baselined at adoption"
+  - id: DS-0002
+    paths:
+      - docker/llama-swap-sd.Containerfile
+      - docker/unified/audio.Dockerfile
+      - docker/unified/base-cuda.Dockerfile
+      - docker/unified/base-vulkan.Dockerfile
+      - docker/unified/ik-llama.Dockerfile
+      - docker/unified/llama.Dockerfile
+      - docker/unified/sd.Dockerfile
+      - docker/unified/whisper.Dockerfile
+    expired_at: 2027-01-12
+    statement: "inherited finding (Image user should not be 'root'); baselined at adoption"
+  - id: DS-0026
+    paths:
+      - .devcontainer/Dockerfile.praetor
+      - Dockerfile
+      - docker/llama-swap-sd.Containerfile
+      - docker/unified/audio.Dockerfile
+      - docker/unified/base-cuda.Dockerfile
+      - docker/unified/base-vulkan.Dockerfile
+      - docker/unified/ik-llama.Dockerfile
+      - docker/unified/llama.Dockerfile
+      - docker/unified/rootless.Dockerfile
+      - docker/unified/runtime.Dockerfile
+      - docker/unified/sd.Dockerfile
+      - docker/unified/whisper.Dockerfile
+    expired_at: 2027-01-12
+    statement: "inherited finding (No HEALTHCHECK defined); baselined at adoption"
+  - id: KSV-0001
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Can elevate its own privileges); baselined at adoption"
+  - id: KSV-0003
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Default capabilities: some containers do not drop all); baselined at adoption"
+  - id: KSV-0004
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Default capabilities: some containers do not drop any); baselined at adoption"
+  - id: KSV-0011
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (CPU not limited); baselined at adoption"
+  - id: KSV-0012
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Runs as root user); baselined at adoption"
+  - id: KSV-0014
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Root file system is not read-only); baselined at adoption"
+  - id: KSV-0015
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (CPU requests not specified); baselined at adoption"
+  - id: KSV-0016
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Memory requests not specified); baselined at adoption"
+  - id: KSV-0018
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Memory not limited); baselined at adoption"
+  - id: KSV-0020
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Runs with UID <= 10000); baselined at adoption"
+  - id: KSV-0021
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Runs with GID <= 10000); baselined at adoption"
+  - id: KSV-0030
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Runtime/Default Seccomp profile not set); baselined at adoption"
+  - id: KSV-0048
+    paths:
+      - cmd/kubeswap/chart/templates/rbac.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Manage Kubernetes workloads and pods); baselined at adoption"
+  - id: KSV-0056
+    paths:
+      - cmd/kubeswap/chart/templates/rbac.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Manage Kubernetes networking); baselined at adoption"
+  - id: KSV-0104
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Seccomp policies disabled); baselined at adoption"
+  - id: KSV-0106
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Container capabilities must only include NET_BIND_SERVICE); baselined at adoption"
+  - id: KSV-0118
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Default security context configured); baselined at adoption"
+  - id: KSV-0125
+    paths:
+      - cmd/kubeswap/chart/templates/deployment.yaml
+    expired_at: 2027-01-12
+    statement: "inherited finding (Restrict container images to trusted registries); baselined at adoption"

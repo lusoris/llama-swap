@@ -1,0 +1,48 @@
+---
+name: Trivy Scan
+
+'on':
+  schedule:
+    - cron: '0 4 * * *'
+  push:
+    branches: [main]
+  # No paths filter: a secret or a vulnerable dependency can land in any
+  # file trivy reads.
+  pull_request:
+
+jobs:
+  trivy:
+    runs-on: ubuntu-26.04
+    env:
+      TRIVY_VERSION: '0.76.0'
+      # sha256 of trivy_0.76.0_Linux-64bit.tar.gz, from the release's
+      # trivy_0.76.0_checksums.txt; the release's cosign bundle verified
+      # against the aquasecurity/trivy reusable-release workflow identity.
+      TRIVY_SHA256: >-
+        e24b1c51293c1b15e4ba8d45bbc7891ba053f90278ec2698f3562c993e145fe7
+    steps:
+      - uses: actions/checkout@v7
+
+      # The binary comes straight from the release and is checked against a
+      # pinned digest: trivy-action and setup-trivy tags were rewritten to
+      # malicious commits in March 2026 (GHSA-69fq-xp46-6x23).
+      - name: Install trivy
+        run: |
+          tarball="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          base="https://github.com/aquasecurity/trivy/releases/download"
+          curl -fsSL --max-time 120 -o "$RUNNER_TEMP/$tarball" \
+            "$base/v${TRIVY_VERSION}/$tarball"
+          echo "$TRIVY_SHA256  $RUNNER_TEMP/$tarball" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/trivy"
+          tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP/trivy" trivy
+          echo "$RUNNER_TEMP/trivy" >> "$GITHUB_PATH"
+
+      # Accepted findings are listed with a reason in .trivyignore.yaml
+      # (misconfigurations) and security/vex/go.openvex.json
+      # (vulnerabilities); any other finding fails the job.
+      - name: Run trivy
+        run: >-
+          trivy fs --scanners vuln,secret,misconfig
+          --ignorefile .trivyignore.yaml
+          --vex security/vex/go.openvex.json
+          --exit-code 1 .
