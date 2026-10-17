@@ -3,7 +3,9 @@ module github.com/mostlygeek/llama-swap/.github/tools
 go 1.27.2
 
 tool (
+	github.com/fzipp/gocyclo/cmd/gocyclo
 	github.com/securego/gosec/v2/cmd/gosec
+	github.com/uudashr/gocognit/cmd/gocognit
 	github.com/zricethezav/gitleaks/v8
 	golang.org/x/vuln/cmd/govulncheck
 )
@@ -33,6 +35,7 @@ require (
 	github.com/fatih/semgroup v1.2.0 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
+	github.com/fzipp/gocyclo v0.6.0 // indirect
 	github.com/gitleaks/go-gitdiff v0.9.1 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -93,6 +96,7 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/ulikunitz/xz v0.5.17 // indirect
+	github.com/uudashr/gocognit v1.3.0 // indirect
 	github.com/wasilibs/go-re2 v1.9.0 // indirect
 	github.com/wasilibs/wazero-helpers v0.0.0-20240620070341-3dff1577cd52 // indirect
 	github.com/xo/terminfo v1.0.0 // indirect
