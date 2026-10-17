@@ -12,16 +12,17 @@ const MaxToolResultBytes = 16 * 1024
 
 // CapResult truncates content to max bytes and marks the result when it does.
 func CapResult(content string, max int) Result {
-	capped, truncated := capText(content, max)
+	capped, truncated := CapText(content, max)
 	if truncated {
 		capped += "\n[truncated]"
 	}
 	return Result{Content: capped, Truncated: truncated}
 }
 
-// capText truncates s at the last newline before maxBytes. It reports whether
-// anything was removed.
-func capText(s string, maxBytes int) (string, bool) {
+// CapText truncates s at the last newline before maxBytes. It reports whether
+// anything was removed. Tool results land in a local model's context window,
+// so every path that produces one passes through here.
+func CapText(s string, maxBytes int) (string, bool) {
 	if maxBytes <= 0 || len(s) <= maxBytes {
 		return s, false
 	}
