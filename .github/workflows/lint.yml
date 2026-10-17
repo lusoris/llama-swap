@@ -1,0 +1,65 @@
+---
+name: Lint
+
+'on':
+  push:
+    branches: [main]
+  # The paths filter covers every input of the lint; it also keeps the job
+  # out of the required checks that the ruleset derives from unfiltered
+  # triggers.
+  pull_request:
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.golangci.yml'
+      - '.github/workflows/lint.yml'
+
+jobs:
+  golangci-lint:
+    runs-on: ubuntu-26.04
+    env:
+      GOLANGCI_LINT_VERSION: '2.15.0'
+      # sha256 of golangci-lint-2.15.0-linux-amd64.tar.gz, from the release's
+      # checksums file; the tarball's GitHub attestation verified against
+      # golangci/golangci-lint.
+      GOLANGCI_LINT_SHA256: >-
+        9b7fe6a6bf6334b98decf8d86b11415ea7889afdabdd1959fdce23af2a9ebcea
+    steps:
+      # The lint compares against the merge base, so it needs the history.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: 'go.mod'
+          # See ci.yml: setup-go's cache key carries no job name, so every job
+          # in the repository would share one build cache entry.
+          cache: false
+
+      - name: Install golangci-lint
+        run: |
+          name="golangci-lint-${GOLANGCI_LINT_VERSION}-linux-amd64"
+          base="https://github.com/golangci/golangci-lint/releases/download"
+          curl -fsSL --max-time 120 -o "$RUNNER_TEMP/$name.tar.gz" \
+            "$base/v${GOLANGCI_LINT_VERSION}/$name.tar.gz"
+          echo "$GOLANGCI_LINT_SHA256  $RUNNER_TEMP/$name.tar.gz" \
+            | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$name.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/$name" >> "$GITHUB_PATH"
+
+      # The tree carries findings inherited from upstream, so only findings
+      # in the lines a change adds fail the job: on a pull request those
+      # since the merge base with the target branch, on main those of the
+      # pushed commit.
+      - name: Run golangci-lint
+        env:
+          BASE: >-
+            ${{ github.event_name == 'pull_request'
+            && format('origin/{0}', github.base_ref) || 'HEAD~' }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            golangci-lint run --new-from-merge-base="$BASE" ./...
+          else
+            golangci-lint run --new-from-rev="$BASE" ./...
+          fi
