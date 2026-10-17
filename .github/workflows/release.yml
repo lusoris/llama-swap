@@ -13,11 +13,19 @@ on:
         required: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    permissions:
+      # upload the release assets
+      contents: write
+      # keyless cosign signature of the checksums file (.goreleaser.yaml signs)
+      id-token: write
+    outputs:
+      hashes: ${{ steps.hashes.outputs.hashes }}
+      tag: ${{ steps.hashes.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -53,7 +61,13 @@ jobs:
         run: |
           make ui
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+
       - name: Run GoReleaser
+        id: goreleaser
         uses: goreleaser/goreleaser-action@1a80836c5c9d9e5755a25cb59ec6f45a3b5f41a8 #7.2.1
         with:
           # either 'goreleaser' (default) or 'goreleaser-pro'
@@ -63,6 +77,36 @@ jobs:
           args: release --clean --release-notes=${{ runner.temp }}/release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # The SLSA generator signs provenance over these digests: every line of
+      # the checksums file, so each archive and each SBOM document is a subject.
+      - name: Collect the release digests
+        id: hashes
+        env:
+          ARTIFACTS: ${{ steps.goreleaser.outputs.artifacts }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          checksums=$(jq -r '.[] | select(.type == "Checksum") | .path' <<< "${ARTIFACTS}")
+          echo "hashes=$(base64 -w0 < "${checksums}")" >> "${GITHUB_OUTPUT}"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+
+  provenance:
+    needs: goreleaser
+    permissions:
+      # read the workflow run the provenance describes
+      actions: read
+      # sign the provenance keyless
+      id-token: write
+      # attach the provenance to the release
+      contents: write
+    # SLSA Build Level 3: the generator signs in its own reusable workflow.
+    # slsa-verifier accepts its provenance only when it is called by a tag.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.goreleaser.outputs.hashes }}
+      upload-assets: true
+      upload-tag-name: ${{ needs.goreleaser.outputs.tag }}
 
   trigger-tap-update:
     runs-on: ubuntu-latest
