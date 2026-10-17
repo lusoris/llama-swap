@@ -48,12 +48,6 @@ sboms:
       - "${artifact}.cyclonedx.json"
     cmd: syft
     args: ["$artifact", "--output", "cyclonedx-json=${document}"]
-  - id: spdx
-    artifacts: archive
-    documents:
-      - "${artifact}.spdx.json"
-    cmd: syft
-    args: ["$artifact", "--output", "spdx-json=${document}"]
 
 # Keyless cosign signature over the checksums file. cosign v3 writes one Sigstore
 # bundle holding the signature, the Fulcio certificate and the transparency-log
