@@ -1,0 +1,15 @@
+# Findings of `gitleaks git` that are not secrets. One entry per finding,
+# keyed by gitleaks' fingerprint (commit:file:rule:line), each with its reason.
+
+# Example llama-swap API key in the apiKeys sample; it authenticates nothing
+# outside a local example config.
+8a06d56b5444e62eccb6cbdf3616b232487b1125:docs/config.example.yaml:generic-api-key:174
+
+# Placeholder tailnet node key (repeated 0123456789abcdef) in a test fixture.
+8a06d56b5444e62eccb6cbdf3616b232487b1125:ui/src/lib/activitySource.test.ts:generic-api-key:8
+
+# Placeholder tailnet node key (repeated 0123456789abcdef) in the tailcat guide.
+8a06d56b5444e62eccb6cbdf3616b232487b1125:docs/kb/guides/operations/tailcat.md:generic-api-key:45
+
+# Same placeholder node key in a since-removed tailcat playground guide.
+f1d38508742852af6316f07dc60e21231cf8c953:docs/kb/guides/operations/tailcat-playground.md:generic-api-key:79
