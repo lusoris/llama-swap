@@ -28,7 +28,13 @@ register:
         kind: message
         format: json
         selector: invariants.*
-exceptions: []
+exceptions:
+  - rule: HISS-08
+    path: cmd/vllm-wrapper/main.go
+    category: D
+    entered: "2026-10-18"
+    reason: "upstream mostlygeek/llama-swap code the fork carries unchanged; syscall.Kill(stopPID, SIGTERM) behind stopPID > 0 admits pid 1 (EPERM for a user, but it stops init in a container that runs as root); fix it upstream (an upstream post needs the fleet's POST line first) or carry a fork patch, then remove this entry"
+    expires: "2027-02-15"
 
 # Standard overrides only increase strictness. The explicit review mode below
 # permits single-maintainer operation; all other gates stay enforced.
@@ -42,3 +48,6 @@ overrides:
     # retains the minimum.
     review_mode: single_maintainer
     dismiss_stale_reviews: true
+
+    # Declared at its live value; the forge default is the stricter one.
+    require_extra_approval_for_unattributed_changes: true

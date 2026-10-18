@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generated_at": "2026-10-16T20:19:14Z",
+  "generated_at": "2026-10-18T03:19:45Z",
   "repository": "lusoris/llama-swap",
-  "commit_sha": "4e5950100e5fa85219796ce8b185e208d9ed4eb2",
-  "total_infractions": 287,
+  "commit_sha": "2e9cf82be58630f9a2ec79bb930fe64c71d20760",
+  "total_infractions": 283,
   "infractions": [
     {
       "rule_id": "HISS-02",
@@ -25,6 +25,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/fake-model/main.go",
       "line_number": 128,
+      "symbol": "startLoading",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:startLoading",
       "fingerprint": "cmd/fake-model/main.go:HISS-02:fn:startLoading#1"
@@ -51,6 +52,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/kubeswap/manage.go",
       "line_number": 133,
+      "symbol": "waitForPodsGone",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:waitForPodsGone",
       "fingerprint": "cmd/kubeswap/manage.go:HISS-02:fn:waitForPodsGone#1"
@@ -59,6 +61,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/kubeswap/manage.go",
       "line_number": 339,
+      "symbol": "runStatusWithClient",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:runStatusWithClient",
       "fingerprint": "cmd/kubeswap/manage.go:HISS-02:fn:runStatusWithClient#1"
@@ -76,6 +79,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/kubeswap/manage.go",
       "line_number": 540,
+      "symbol": "logsCmd",
       "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
       "anchor": "fn:logsCmd",
       "fingerprint": "cmd/kubeswap/manage.go:HISS-02:fn:logsCmd#1"
@@ -93,6 +97,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/kubeswap/serve.go",
       "line_number": 66,
+      "symbol": "waitForDeploymentGone",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:waitForDeploymentGone",
       "fingerprint": "cmd/kubeswap/serve.go:HISS-02:fn:waitForDeploymentGone#1"
@@ -119,6 +124,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/kubeswap/serve.go",
       "line_number": 256,
+      "symbol": "createMissing",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:createMissing",
       "fingerprint": "cmd/kubeswap/serve.go:HISS-02:fn:createMissing#1"
@@ -145,6 +151,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/kubeswap/serve.go",
       "line_number": 578,
+      "symbol": "serveCmd",
       "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
       "anchor": "fn:serveCmd",
       "fingerprint": "cmd/kubeswap/serve.go:HISS-02:fn:serveCmd#1"
@@ -162,6 +169,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/kubeswap/serve.go",
       "line_number": 821,
+      "symbol": "server.pollLoop",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:server.pollLoop",
       "fingerprint": "cmd/kubeswap/serve.go:HISS-02:fn:server.pollLoop#1"
@@ -196,6 +204,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/misc/benchmark-chatcompletion/main.go",
       "line_number": 120,
+      "symbol": "main",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:main",
       "fingerprint": "cmd/misc/benchmark-chatcompletion/main.go:HISS-02:fn:main#1"
@@ -204,6 +213,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/monitor-test/main.go",
       "line_number": 83,
+      "symbol": "main",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:main",
       "fingerprint": "cmd/monitor-test/main.go:HISS-02:fn:main#1"
@@ -221,6 +231,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/simple-responder/simple-responder.go",
       "line_number": 351,
+      "symbol": "main",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:main",
       "fingerprint": "cmd/simple-responder/simple-responder.go:HISS-02:fn:main#1"
@@ -238,6 +249,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/test-concurrency/request.go",
       "line_number": 47,
+      "symbol": "sendRequest",
       "message": "http.Post takes no context, so no deadline bounds it; use http.NewRequestWithContext",
       "anchor": "fn:sendRequest",
       "fingerprint": "cmd/test-concurrency/request.go:HISS-02:fn:sendRequest#1"
@@ -264,6 +276,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/vllm-wrapper/main.go",
       "line_number": 84,
+      "symbol": "serveCmd",
       "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
       "anchor": "fn:serveCmd",
       "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:serveCmd#1"
@@ -272,14 +285,25 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/vllm-wrapper/main.go",
       "line_number": 204,
+      "symbol": "sleepCmd",
       "message": "http.Post takes no context, so no deadline bounds it; use http.NewRequestWithContext",
       "anchor": "fn:sleepCmd",
       "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:sleepCmd#1"
     },
     {
+      "rule_id": "HISS-08",
+      "file_path": "cmd/vllm-wrapper/main.go",
+      "line_number": 217,
+      "symbol": "sleepCmd",
+      "message": "Signal call syscall.Kill with target stopPID must be guarded; add guard: if stopPID \u003c= 1 || stopPID == os.Getpid() || stopPID == syscall.Getpgrp() { ... }",
+      "anchor": "fn:sleepCmd",
+      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-08:fn:sleepCmd#1"
+    },
+    {
       "rule_id": "HISS-02",
       "file_path": "cmd/vllm-wrapper/main.go",
       "line_number": 232,
+      "symbol": "sleepVLLM",
       "message": "http.Post takes no context, so no deadline bounds it; use http.NewRequestWithContext",
       "anchor": "fn:sleepVLLM",
       "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:sleepVLLM#1"
@@ -288,6 +312,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/vllm-wrapper/main.go",
       "line_number": 248,
+      "symbol": "wakeUpVLLM",
       "message": "http.Post takes no context, so no deadline bounds it; use http.NewRequestWithContext",
       "anchor": "fn:wakeUpVLLM",
       "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:wakeUpVLLM#1"
@@ -296,6 +321,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/vllm-wrapper/main.go",
       "line_number": 295,
+      "symbol": "checkHealthy",
       "message": "http.Get takes no context, so no deadline bounds it; use http.NewRequestWithContext",
       "anchor": "fn:checkHealthy",
       "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:checkHealthy#1"
@@ -304,6 +330,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/vllm-wrapper/main.go",
       "line_number": 336,
+      "symbol": "startDaemon",
       "message": "exec.Command takes no context, so no deadline bounds it; use exec.CommandContext",
       "anchor": "fn:startDaemon",
       "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:startDaemon#1"
@@ -338,6 +365,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/wol-proxy/wol-proxy.go",
       "line_number": 169,
+      "symbol": "newProxy",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:newProxy",
       "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-02:fn:newProxy#1"
@@ -346,6 +374,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/wol-proxy/wol-proxy.go",
       "line_number": 176,
+      "symbol": "newProxy",
       "message": "http.NewRequest takes no context, so no deadline bounds it; use http.NewRequestWithContext",
       "anchor": "fn:newProxy",
       "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-02:fn:newProxy#2"
@@ -370,6 +399,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/wol-proxy/wol-proxy.go",
       "line_number": 225,
+      "symbol": "newProxy",
       "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
       "anchor": "fn:newProxy",
       "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-02:fn:newProxy#3"
@@ -378,6 +408,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/wol-proxy/wol-proxy.go",
       "line_number": 229,
+      "symbol": "newProxy",
       "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
       "anchor": "fn:newProxy",
       "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-02:fn:newProxy#4"
@@ -427,6 +458,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/wol-proxy/wol-proxy.go",
       "line_number": 353,
+      "symbol": "proxyServer.ServeHTTP",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:proxyServer.ServeHTTP",
       "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-02:fn:proxyServer.ServeHTTP#1"
@@ -435,6 +467,7 @@
       "rule_id": "HISS-02",
       "file_path": "cmd/wol-proxy/wol-proxy.go",
       "line_number": 516,
+      "symbol": "sendMagicPacket",
       "message": "net.DialUDP takes no context, so no deadline bounds it; use net.Dialer.DialContext",
       "anchor": "fn:sendMagicPacket",
       "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-02:fn:sendMagicPacket#1"
@@ -715,6 +748,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/config/mcpprovider.go",
       "line_number": 262,
+      "symbol": "runConfigQuery",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:runConfigQuery",
       "fingerprint": "internal/config/mcpprovider.go:HISS-02:fn:runConfigQuery#1"
@@ -786,6 +820,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/config/mcpprovider.go",
       "line_number": 601,
+      "symbol": "newHeapGuard",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:newHeapGuard",
       "fingerprint": "internal/config/mcpprovider.go:HISS-02:fn:newHeapGuard#1"
@@ -934,6 +969,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/event/event.go",
       "line_number": 192,
+      "symbol": "consumer.Listen",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:consumer.Listen",
       "fingerprint": "internal/event/event.go:HISS-02:fn:consumer.Listen#1"
@@ -960,6 +996,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/hw/detect_linux.go",
       "line_number": 356,
+      "symbol": "packageSocketCount",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:packageSocketCount",
       "fingerprint": "internal/hw/detect_linux.go:HISS-02:fn:packageSocketCount#1"
@@ -1009,6 +1046,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/hw/dxgi_windows.go",
       "line_number": 65,
+      "symbol": "detectDXGI",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:detectDXGI",
       "fingerprint": "internal/hw/dxgi_windows.go:HISS-02:fn:detectDXGI#1"
@@ -1066,6 +1104,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/logmon/logging_test.go",
       "line_number": 240,
+      "symbol": "TestLogMonitor_DropsWhenSubscriberBlocked",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:TestLogMonitor_DropsWhenSubscriberBlocked",
       "fingerprint": "internal/logmon/logging_test.go:HISS-02:fn:TestLogMonitor_DropsWhenSubscriberBlocked#1"
@@ -1137,6 +1176,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/mcptools/registry_test.go",
       "line_number": 196,
+      "symbol": "TestRegistry_Paginates",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:TestRegistry_Paginates",
       "fingerprint": "internal/mcptools/registry_test.go:HISS-02:fn:TestRegistry_Paginates#1"
@@ -1362,23 +1402,16 @@
       "rule_id": "HISS-02",
       "file_path": "internal/perf/d3dkmt_windows.go",
       "line_number": 427,
+      "symbol": "tryD3DKMT",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:tryD3DKMT",
       "fingerprint": "internal/perf/d3dkmt_windows.go:HISS-02:fn:tryD3DKMT#1"
     },
     {
-      "rule_id": "HISS-04",
-      "file_path": "internal/perf/gpu_parse.go",
-      "line_number": 146,
-      "symbol": "ParseMactopLine",
-      "message": "Function 'ParseMactopLine' (69 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
-      "anchor": "fn:ParseMactopLine",
-      "fingerprint": "internal/perf/gpu_parse.go:HISS-04:fn:ParseMactopLine#1"
-    },
-    {
       "rule_id": "HISS-02",
       "file_path": "internal/perf/monitor.go",
       "line_number": 147,
+      "symbol": "Monitor.Start",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:Monitor.Start",
       "fingerprint": "internal/perf/monitor.go:HISS-02:fn:Monitor.Start#1"
@@ -1387,6 +1420,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/perf/monitor.go",
       "line_number": 190,
+      "symbol": "Monitor.collectGpuStats",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:Monitor.collectGpuStats",
       "fingerprint": "internal/perf/monitor.go:HISS-02:fn:Monitor.collectGpuStats#1"
@@ -1395,6 +1429,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/perf/monitor.go",
       "line_number": 230,
+      "symbol": "Monitor.forwardGpuStats",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:Monitor.forwardGpuStats",
       "fingerprint": "internal/perf/monitor.go:HISS-02:fn:Monitor.forwardGpuStats#1"
@@ -1403,6 +1438,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/perf/monitor_darwin.go",
       "line_number": 60,
+      "symbol": "tryIoreg",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:tryIoreg",
       "fingerprint": "internal/perf/monitor_darwin.go:HISS-02:fn:tryIoreg#1"
@@ -1420,6 +1456,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/perf/monitor_unix.go",
       "line_number": 88,
+      "symbol": "tryLACT",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:tryLACT",
       "fingerprint": "internal/perf/monitor_unix.go:HISS-02:fn:tryLACT#1"
@@ -1437,6 +1474,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/perf/monitor_unix.go",
       "line_number": 205,
+      "symbol": "tryRocmSmi",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:tryRocmSmi",
       "fingerprint": "internal/perf/monitor_unix.go:HISS-02:fn:tryRocmSmi#1"
@@ -1567,6 +1605,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/process/loading_progress.go",
       "line_number": 87,
+      "symbol": "ProcessCommand.setLoading",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:ProcessCommand.setLoading",
       "fingerprint": "internal/process/loading_progress.go:HISS-02:fn:ProcessCommand.setLoading#1"
@@ -1575,6 +1614,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/process/loading_progress_test.go",
       "line_number": 115,
+      "symbol": "TestProcessCommand_LoadingProgressExtendsTimeout",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:TestProcessCommand_LoadingProgressExtendsTimeout",
       "fingerprint": "internal/process/loading_progress_test.go:HISS-02:fn:TestProcessCommand_LoadingProgressExtendsTimeout#1"
@@ -1583,6 +1623,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/process/process_command.go",
       "line_number": 366,
+      "symbol": "lifecycle.onStart",
       "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
       "anchor": "fn:lifecycle.onStart",
       "fingerprint": "internal/process/process_command.go:HISS-02:fn:lifecycle.onStart#1"
@@ -1591,6 +1632,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/process/process_command.go",
       "line_number": 581,
+      "symbol": "ProcessCommand.newUpstreamCmd",
       "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
       "anchor": "fn:ProcessCommand.newUpstreamCmd",
       "fingerprint": "internal/process/process_command.go:HISS-02:fn:ProcessCommand.newUpstreamCmd#1"
@@ -1599,6 +1641,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/process/process_command.go",
       "line_number": 819,
+      "symbol": "ProcessCommand.sendStopSignal",
       "message": "exec.Command takes no context, so no deadline bounds it; use exec.CommandContext",
       "anchor": "fn:ProcessCommand.sendStopSignal",
       "fingerprint": "internal/process/process_command.go:HISS-02:fn:ProcessCommand.sendStopSignal#1"
@@ -1615,6 +1658,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/process/process_command_forking_test.go",
       "line_number": 226,
+      "symbol": "TestProcessCommand_StopHonorsGracefulTimeout",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:TestProcessCommand_StopHonorsGracefulTimeout",
       "fingerprint": "internal/process/process_command_forking_test.go:HISS-02:fn:TestProcessCommand_StopHonorsGracefulTimeout#1"
@@ -1623,6 +1667,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/process/process_command_forking_test.go",
       "line_number": 295,
+      "symbol": "TestProcessCommand_StopReapsForkedGrandchild",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:TestProcessCommand_StopReapsForkedGrandchild",
       "fingerprint": "internal/process/process_command_forking_test.go:HISS-02:fn:TestProcessCommand_StopReapsForkedGrandchild#1"
@@ -1631,6 +1676,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/process/runtime_windows.go",
       "line_number": 50,
+      "symbol": "taskkillProcessTree",
       "message": "exec.Command takes no context, so no deadline bounds it; use exec.CommandContext",
       "anchor": "fn:taskkillProcessTree",
       "fingerprint": "internal/process/runtime_windows.go:HISS-02:fn:taskkillProcessTree#1"
@@ -1655,6 +1701,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/process/upstream_keepalive_test.go",
       "line_number": 41,
+      "symbol": "newCloseAfterStreamUpstream",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:newCloseAfterStreamUpstream",
       "fingerprint": "internal/process/upstream_keepalive_test.go:HISS-02:fn:newCloseAfterStreamUpstream#1"
@@ -1663,34 +1710,10 @@
       "rule_id": "HISS-02",
       "file_path": "internal/process/upstream_keepalive_test.go",
       "line_number": 75,
+      "symbol": "closeAfterStreamUpstream.serve",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:closeAfterStreamUpstream.serve",
       "fingerprint": "internal/process/upstream_keepalive_test.go:HISS-02:fn:closeAfterStreamUpstream.serve#1"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": "internal/router/base.go",
-      "line_number": 116,
-      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
-      "anchor": "fn:baseRouter.run",
-      "fingerprint": "internal/router/base.go:HISS-02:fn:baseRouter.run#1"
-    },
-    {
-      "rule_id": "HISS-04",
-      "file_path": "internal/router/base.go",
-      "line_number": 465,
-      "symbol": "ServeHTTP",
-      "message": "Function 'ServeHTTP' (156 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
-      "anchor": "fn:baseRouter.ServeHTTP",
-      "fingerprint": "internal/router/base.go:HISS-04:fn:baseRouter.ServeHTTP#1"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": "internal/router/base.go",
-      "line_number": 549,
-      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
-      "anchor": "fn:baseRouter.ServeHTTP",
-      "fingerprint": "internal/router/base.go:HISS-02:fn:baseRouter.ServeHTTP#1"
     },
     {
       "rule_id": "HISS-04",
@@ -1705,6 +1728,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/router/loading.go",
       "line_number": 121,
+      "symbol": "loadingWriter.start",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:loadingWriter.start",
       "fingerprint": "internal/router/loading.go:HISS-02:fn:loadingWriter.start#1"
@@ -1775,6 +1799,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/server/apigroup.go",
       "line_number": 591,
+      "symbol": "Server.serveSSE",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:Server.serveSSE",
       "fingerprint": "internal/server/apigroup.go:HISS-02:fn:Server.serveSSE#1"
@@ -1783,6 +1808,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/server/apigroup_test.go",
       "line_number": 273,
+      "symbol": "waitInflightTrackerCount",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:waitInflightTrackerCount",
       "fingerprint": "internal/server/apigroup_test.go:HISS-02:fn:waitInflightTrackerCount#1"
@@ -1791,6 +1817,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/server/apigroup_test.go",
       "line_number": 289,
+      "symbol": "waitInflightEvent",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:waitInflightEvent",
       "fingerprint": "internal/server/apigroup_test.go:HISS-02:fn:waitInflightEvent#1"
@@ -1840,6 +1867,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/server/inflight.go",
       "line_number": 199,
+      "symbol": "inflightTracker.publishUpdates",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:inflightTracker.publishUpdates",
       "fingerprint": "internal/server/inflight.go:HISS-02:fn:inflightTracker.publishUpdates#1"
@@ -1848,6 +1876,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/server/inflight.go",
       "line_number": 224,
+      "symbol": "inflightTracker.discardQueuedUpdates",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:inflightTracker.discardQueuedUpdates",
       "fingerprint": "internal/server/inflight.go:HISS-02:fn:inflightTracker.discardQueuedUpdates#1"
@@ -1856,17 +1885,10 @@
       "rule_id": "HISS-02",
       "file_path": "internal/server/log.go",
       "line_number": 106,
+      "symbol": "Server.handleLogStream",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:Server.handleLogStream",
       "fingerprint": "internal/server/log.go:HISS-02:fn:Server.handleLogStream#1"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": "internal/server/log_test.go",
-      "line_number": 397,
-      "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
-      "anchor": "fn:TestServer_RequestLogMiddleware_WebSocketUpgrade",
-      "fingerprint": "internal/server/log_test.go:HISS-02:fn:TestServer_RequestLogMiddleware_WebSocketUpgrade#1"
     },
     {
       "rule_id": "HISS-04",
@@ -1943,6 +1965,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/store/sqlite/sqlite.go",
       "line_number": 52,
+      "symbol": "New",
       "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
       "anchor": "fn:New",
       "fingerprint": "internal/store/sqlite/sqlite.go:HISS-02:fn:New#1"
@@ -1951,6 +1974,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/store/sqlite/sqlite.go",
       "line_number": 58,
+      "symbol": "New",
       "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
       "anchor": "fn:New",
       "fingerprint": "internal/store/sqlite/sqlite.go:HISS-02:fn:New#2"
@@ -1959,6 +1983,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/store/sqlite/sqlite.go",
       "line_number": 67,
+      "symbol": "New",
       "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
       "anchor": "fn:New",
       "fingerprint": "internal/store/sqlite/sqlite.go:HISS-02:fn:New#3"
@@ -1967,6 +1992,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/store/sqlite/sqlite.go",
       "line_number": 79,
+      "symbol": "New",
       "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
       "anchor": "fn:New",
       "fingerprint": "internal/store/sqlite/sqlite.go:HISS-02:fn:New#4"
@@ -1993,6 +2019,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/tailcat/transport.go",
       "line_number": 601,
+      "symbol": "Client.drainRetiredClient",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:Client.drainRetiredClient",
       "fingerprint": "internal/tailcat/transport.go:HISS-02:fn:Client.drainRetiredClient#1"
@@ -2001,6 +2028,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/tailcat/transport_test.go",
       "line_number": 221,
+      "symbol": "TestTailcatTransport_LocalDERPHTTP",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:TestTailcatTransport_LocalDERPHTTP",
       "fingerprint": "internal/tailcat/transport_test.go:HISS-02:fn:TestTailcatTransport_LocalDERPHTTP#1"
@@ -2009,6 +2037,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/tailcat/transport_test.go",
       "line_number": 236,
+      "symbol": "TestTailcatTransport_LocalDERPHTTP",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:TestTailcatTransport_LocalDERPHTTP",
       "fingerprint": "internal/tailcat/transport_test.go:HISS-02:fn:TestTailcatTransport_LocalDERPHTTP#2"
@@ -2017,6 +2046,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/tailcat/transport_test.go",
       "line_number": 348,
+      "symbol": "TestTailcatTransport_ReconnectAfterServerRestart",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:TestTailcatTransport_ReconnectAfterServerRestart",
       "fingerprint": "internal/tailcat/transport_test.go:HISS-02:fn:TestTailcatTransport_ReconnectAfterServerRestart#1"
@@ -2025,6 +2055,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/tailcat/transport_test.go",
       "line_number": 397,
+      "symbol": "runLocalDERP",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:runLocalDERP",
       "fingerprint": "internal/tailcat/transport_test.go:HISS-02:fn:runLocalDERP#1"
@@ -2033,6 +2064,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/watcher/dirwatcher.go",
       "line_number": 82,
+      "symbol": "DirWatcher.Run",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:DirWatcher.Run",
       "fingerprint": "internal/watcher/dirwatcher.go:HISS-02:fn:DirWatcher.Run#1"
@@ -2041,6 +2073,7 @@
       "rule_id": "HISS-02",
       "file_path": "internal/watcher/watcher.go",
       "line_number": 46,
+      "symbol": "Watcher.Run",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:Watcher.Run",
       "fingerprint": "internal/watcher/watcher.go:HISS-02:fn:Watcher.Run#1"
@@ -2058,6 +2091,7 @@
       "rule_id": "HISS-02",
       "file_path": "llama-swap.go",
       "line_number": 468,
+      "symbol": "main",
       "message": "Unbounded for loop without an exit condition (for {} / for ;; )",
       "anchor": "fn:main",
       "fingerprint": "llama-swap.go:HISS-02:fn:main#1"

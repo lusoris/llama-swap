@@ -8,6 +8,10 @@ name: CI
     branches: ['main']
   merge_group:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     runs-on: ubuntu-26.04
@@ -28,8 +32,24 @@ jobs:
       - name: Checkout source
         if: github.event.pull_request.draft != true
         uses: actions/checkout@v7
-      - name: Setup Go
+        with:
+          persist-credentials: false
+
+      - name: Check for go.mod
         if: github.event.pull_request.draft != true
+        id: manifest
+        run: |
+          if [ -f go.mod ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Go steps skipped: no go.mod yet"
+          fi
+
+      - name: Setup Go
+        if: >-
+          github.event.pull_request.draft != true &&
+          steps.manifest.outputs.present == 'true'
         uses: actions/setup-go@v7
         with:
           go-version-file: 'go.mod'
@@ -46,7 +66,9 @@ jobs:
       # off for the two cache steps alone.
       # yamllint disable rule:line-length
       - name: Restore Go module cache
-        if: github.event.pull_request.draft != true
+        if: >-
+          github.event.pull_request.draft != true &&
+          steps.manifest.outputs.present == 'true'
         uses: actions/cache@v6
         with:
           path: ~/go/pkg/mod
@@ -61,7 +83,9 @@ jobs:
       # actually built. `test` names this job's build cache; give every job in
       # the repository a different name here.
       - name: Restore Go build cache
-        if: github.event.pull_request.draft != true
+        if: >-
+          github.event.pull_request.draft != true &&
+          steps.manifest.outputs.present == 'true'
         uses: actions/cache@v6
         with:
           path: ~/.cache/go-build
@@ -75,9 +99,13 @@ jobs:
       # audit, flavor audit) need praetorctl, which no step installs; the git
       # hooks adoption writes run them.
       - name: Vet
-        if: github.event.pull_request.draft != true
+        if: >-
+          github.event.pull_request.draft != true &&
+          steps.manifest.outputs.present == 'true'
         run: go vet ./...
 
       - name: Test
-        if: github.event.pull_request.draft != true
+        if: >-
+          github.event.pull_request.draft != true &&
+          steps.manifest.outputs.present == 'true'
         run: go test -race ./...
