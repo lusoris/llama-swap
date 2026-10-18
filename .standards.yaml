@@ -48,3 +48,6 @@ overrides:
     # retains the minimum.
     review_mode: single_maintainer
     dismiss_stale_reviews: true
+
+    # Declared at its live value; the forge default is the stricter one.
+    require_extra_approval_for_unattributed_changes: true
