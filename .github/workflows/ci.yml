@@ -95,9 +95,29 @@ jobs:
             gobuild-${{ runner.os }}-${{ runner.arch }}-test-
       # yamllint enable rule:line-length
 
-      # Only the Go toolchain runs here. Praetor's gates (compile-context,
-      # audit, flavor audit) need praetorctl, which no step installs; the git
-      # hooks adoption writes run them.
+      - name: Install praetorctl at the engine pin
+        # PRAETOR_REF is the repository's one engine pin: the git hooks read it
+        # from here (.config/lefthook/engine.sh) and run the same engine CI
+        # installs. A full commit id only, never a branch or a tag. The
+        # version check fails the step when the binary is not that commit.
+        if: >-
+          github.event.pull_request.draft != true &&
+          steps.manifest.outputs.present == 'true'
+        env:
+          PRAETOR_REF: 784c42f5aff539806619ae8858afcc468f1e3e3a
+        run: |
+          set -euo pipefail
+          go install "github.com/cordanaLLM/praetor/cmd/standardsctl@${PRAETOR_REF}"
+          ln -s "$(go env GOPATH)/bin/standardsctl" "$(go env GOPATH)/bin/praetorctl"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          "$(go env GOPATH)/bin/praetorctl" version | grep -Fx "praetorctl version ${PRAETOR_REF:0:12}"
+
+      - name: Audit the Praetor-managed files (praetorctl audit --offline)
+        if: >-
+          github.event.pull_request.draft != true &&
+          steps.manifest.outputs.present == 'true'
+        run: praetorctl audit --offline
+
       - name: Vet
         if: >-
           github.event.pull_request.draft != true &&
