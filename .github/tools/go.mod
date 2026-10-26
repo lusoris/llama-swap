@@ -1,6 +1,6 @@
 module github.com/mostlygeek/llama-swap/.github/tools
 
-go 1.27.2
+go 1.27.3
 
 tool (
 	github.com/fzipp/gocyclo/cmd/gocyclo
@@ -55,7 +55,7 @@ require (
 	github.com/huandu/xstrings v1.5.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/invopop/jsonschema v0.14.0 // indirect
-	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/magiconair/properties v1.8.9 // indirect

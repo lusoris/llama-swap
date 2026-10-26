@@ -504,6 +504,26 @@ func TestCapcompat_ClientJoinsBasePathPrefix(t *testing.T) {
 	assert.Equal(t, "/upstream/prefix/v1/models", gotPath)
 }
 
+func TestCapcompat_ClientRefusesDotSegments(t *testing.T) {
+	hits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		_, err := w.Write(fixture(t, "llama-server", "v1_models.json"))
+		assert.NoError(t, err)
+	}))
+	defer server.Close()
+
+	base, err := url.Parse(server.URL + "/upstream/prefix")
+	require.NoError(t, err)
+	client := NewClient(base, config.TimeoutsConfig{})
+
+	for _, path := range []string{"/../admin", "/v1/./models", "/v1/.."} {
+		var models ModelsResponse
+		assert.Error(t, client.GetJSON(context.Background(), path, &models), path)
+	}
+	assert.Zero(t, hits, "no request leaves the base path prefix")
+}
+
 func TestCapcompat_ClientSendsHeaders(t *testing.T) {
 	var gotAuth string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

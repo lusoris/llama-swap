@@ -339,13 +339,15 @@ func waitGpuRing(t *testing.T, m *Monitor, wantID int) {
 func TestStart_RestartsGpuCollectorAfterItStops(t *testing.T) {
 	// the first collector delivers one sample and exits, like nvidia-smi dying
 	f := &fakeGpuCollector{steps: []fakeGpuStep{{stayOpen: false}}}
-	m, gpuCh := newGpuTestMonitor(t, f)
+	m, _ := newGpuTestMonitor(t, f)
 
 	m.Start()
 	defer m.Stop()
 
-	waitGpuStat(t, gpuCh, 1)
-	waitGpuStat(t, gpuCh, 2)
+	// both collectors publish back to back, so the subscriber channel can
+	// drop the second sample; the ring keeps both
+	waitGpuRing(t, m, 1)
+	waitGpuRing(t, m, 2)
 	assert.Equal(t, 2, f.callCount())
 }
 
