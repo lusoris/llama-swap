@@ -253,17 +253,25 @@ func (c *Client) SetHeader(key, value string) {
 	c.headers.Set(key, value)
 }
 
-// GetJSON fetches path relative to the client's base URL and decodes the body
-// into v. A non-2xx response is an error carrying the status. Each path
-// segment is escaped, and a "." or ".." segment is refused, so the request
-// never leaves the base URL's path prefix.
-func (c *Client) GetJSON(ctx context.Context, path string, v any) error {
-	target := c.base
+// joinEscaped appends path to base one escaped segment at a time. A "." or
+// ".." segment is refused, so the result never leaves base's path prefix.
+func joinEscaped(base *url.URL, path string) (*url.URL, error) {
+	target := base
 	for segment := range strings.SplitSeq(strings.Trim(path, "/"), "/") {
 		if segment == "." || segment == ".." {
-			return fmt.Errorf("building %s request: dot segment in path", path)
+			return nil, errors.New("dot segment in path")
 		}
 		target = target.JoinPath(url.PathEscape(segment))
+	}
+	return target, nil
+}
+
+// GetJSON fetches path relative to the client's base URL and decodes the body
+// into v. A non-2xx response is an error carrying the status.
+func (c *Client) GetJSON(ctx context.Context, path string, v any) error {
+	target, err := joinEscaped(c.base, path)
+	if err != nil {
+		return fmt.Errorf("building %s request: %w", path, err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)

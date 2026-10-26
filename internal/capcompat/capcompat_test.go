@@ -508,7 +508,8 @@ func TestCapcompat_ClientRefusesDotSegments(t *testing.T) {
 	hits := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits++
-		w.Write(fixture(t, "llama-server", "v1_models.json"))
+		_, err := w.Write(fixture(t, "llama-server", "v1_models.json"))
+		assert.NoError(t, err)
 	}))
 	defer server.Close()
 
