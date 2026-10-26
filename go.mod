@@ -1,6 +1,6 @@
 module github.com/mostlygeek/llama-swap
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/billziss-gh/golib v0.2.0
