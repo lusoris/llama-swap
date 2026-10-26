@@ -254,9 +254,17 @@ func (c *Client) SetHeader(key, value string) {
 }
 
 // GetJSON fetches path relative to the client's base URL and decodes the body
-// into v. A non-2xx response is an error carrying the status.
+// into v. A non-2xx response is an error carrying the status. Each path
+// segment is escaped, and a "." or ".." segment is refused, so the request
+// never leaves the base URL's path prefix.
 func (c *Client) GetJSON(ctx context.Context, path string, v any) error {
-	target := c.base.JoinPath(path)
+	target := c.base
+	for segment := range strings.SplitSeq(strings.Trim(path, "/"), "/") {
+		if segment == "." || segment == ".." {
+			return fmt.Errorf("building %s request: dot segment in path", path)
+		}
+		target = target.JoinPath(url.PathEscape(segment))
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
 	if err != nil {
