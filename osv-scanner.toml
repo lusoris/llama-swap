@@ -1,0 +1,8 @@
+# OSV-Scanner configuration (https://google.github.io/osv-scanner/configuration/).
+# Every entry is a dated exception: ignoreUntil is entry date plus the interval of its
+# category, and an expired entry no longer suppresses the finding.
+
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+ignoreUntil = 2026-11-10
+reason = "Category C (10 days from 2026-10-31). deepmerge 4.3.1, prototype poisoning in mergeObject (low), no patched release (latest is 4.3.1); reached only through @sveltejs/vite-plugin-svelte 7.0.0 (latest 7.3.1 still requires deepmerge ^4.3.1), a build-time devDependency of ui/ (ui/package-lock.json), never shipped to a browser. Re-check when vite-plugin-svelte drops or bumps deepmerge, or a patched deepmerge appears."
