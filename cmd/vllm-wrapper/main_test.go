@@ -174,13 +174,17 @@ func TestStartDaemonArgv(t *testing.T) {
 }
 
 func TestGuardStopPID(t *testing.T) {
-	child := exec.Command("sleep", "5")
+	child := exec.CommandContext(context.Background(), "sleep", "5")
 	if err := child.Start(); err != nil {
 		t.Fatalf("failed to start child process: %v", err)
 	}
 	defer func() {
-		_ = child.Process.Kill()
-		_ = child.Wait()
+		if err := child.Process.Kill(); err != nil {
+			t.Logf("kill child %d: %v", child.Process.Pid, err)
+		}
+		if err := child.Wait(); err != nil {
+			t.Logf("child %d exited: %v", child.Process.Pid, err)
+		}
 	}()
 	childPID := child.Process.Pid
 
@@ -207,7 +211,7 @@ func TestGuardStopPID(t *testing.T) {
 		})
 	}
 
-	if 2 != os.Getpid() && 2 != syscall.Getpgrp() {
+	if pid := 2; pid != os.Getpid() && pid != syscall.Getpgrp() {
 		t.Run("boundary pid 2", func(t *testing.T) {
 			if err := guardStopPID(2); err != nil {
 				t.Errorf("guardStopPID(2) expected nil, got error: %v", err)
