@@ -83,7 +83,7 @@ models:
 
 When llama-swap stops the model, it will:
 1. Send a sleep request to the vLLM daemon (POST to `/sleep` with JSON `{"level": 1}`).
-2. If `--stop-pid` is provided, send SIGTERM to the specified `vllm-wrapper serve` process after the sleep request succeeds.
+2. If `--stop-pid` is provided, send SIGTERM to the specified `vllm-wrapper serve` process after the sleep request succeeds. Values less than or equal to 1, the wrapper's own PID, and its own process group are refused.
 3. Exit with status 0, leaving the vLLM daemon running but asleep while allowing llama-swap to complete the unload operation.
 
 ## Example Configuration

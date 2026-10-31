@@ -3,7 +3,7 @@
   "generated_at": "2026-10-18T03:19:45Z",
   "repository": "lusoris/llama-swap",
   "commit_sha": "2e9cf82be58630f9a2ec79bb930fe64c71d20760",
-  "total_infractions": 283,
+  "total_infractions": 274,
   "infractions": [
     {
       "rule_id": "HISS-02",
@@ -262,86 +262,6 @@
       "message": "Function 'Update' (65 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
       "anchor": "fn:model.Update",
       "fingerprint": "cmd/test-concurrency/tui.go:HISS-04:fn:model.Update#1"
-    },
-    {
-      "rule_id": "HISS-04",
-      "file_path": "cmd/vllm-wrapper/main.go",
-      "line_number": 49,
-      "symbol": "serveCmd",
-      "message": "Function 'serveCmd' (128 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
-      "anchor": "fn:serveCmd",
-      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-04:fn:serveCmd#1"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": "cmd/vllm-wrapper/main.go",
-      "line_number": 84,
-      "symbol": "serveCmd",
-      "message": "Context without a deadline reaches a call; derive it with context.WithTimeout or context.WithDeadline",
-      "anchor": "fn:serveCmd",
-      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:serveCmd#1"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": "cmd/vllm-wrapper/main.go",
-      "line_number": 204,
-      "symbol": "sleepCmd",
-      "message": "http.Post takes no context, so no deadline bounds it; use http.NewRequestWithContext",
-      "anchor": "fn:sleepCmd",
-      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:sleepCmd#1"
-    },
-    {
-      "rule_id": "HISS-08",
-      "file_path": "cmd/vllm-wrapper/main.go",
-      "line_number": 217,
-      "symbol": "sleepCmd",
-      "message": "Signal call syscall.Kill with target stopPID must be guarded; add guard: if stopPID \u003c= 1 || stopPID == os.Getpid() || stopPID == syscall.Getpgrp() { ... }",
-      "anchor": "fn:sleepCmd",
-      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-08:fn:sleepCmd#1"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": "cmd/vllm-wrapper/main.go",
-      "line_number": 232,
-      "symbol": "sleepVLLM",
-      "message": "http.Post takes no context, so no deadline bounds it; use http.NewRequestWithContext",
-      "anchor": "fn:sleepVLLM",
-      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:sleepVLLM#1"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": "cmd/vllm-wrapper/main.go",
-      "line_number": 248,
-      "symbol": "wakeUpVLLM",
-      "message": "http.Post takes no context, so no deadline bounds it; use http.NewRequestWithContext",
-      "anchor": "fn:wakeUpVLLM",
-      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:wakeUpVLLM#1"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": "cmd/vllm-wrapper/main.go",
-      "line_number": 295,
-      "symbol": "checkHealthy",
-      "message": "http.Get takes no context, so no deadline bounds it; use http.NewRequestWithContext",
-      "anchor": "fn:checkHealthy",
-      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:checkHealthy#1"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": "cmd/vllm-wrapper/main.go",
-      "line_number": 336,
-      "symbol": "startDaemon",
-      "message": "exec.Command takes no context, so no deadline bounds it; use exec.CommandContext",
-      "anchor": "fn:startDaemon",
-      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-02:fn:startDaemon#1"
-    },
-    {
-      "rule_id": "HISS-07",
-      "file_path": "cmd/vllm-wrapper/main.go",
-      "line_number": 347,
-      "message": "Legacy unchecked error assignment",
-      "anchor": "fn:startDaemon",
-      "fingerprint": "cmd/vllm-wrapper/main.go:HISS-07:fn:startDaemon#1"
     },
     {
       "rule_id": "HISS-04",
@@ -2432,7 +2352,7 @@
       "file_path": "internal/config/merge.go",
       "line_number": 165,
       "symbol": "mergeNodes",
-      "message": "Call cycle through mergeNodes -\u003e mergeValue -\u003e mergeNodes; the call graph must form an acyclic DAG",
+      "message": "Call cycle through mergeNodes -> mergeValue -> mergeNodes; the call graph must form an acyclic DAG",
       "anchor": "fn:mergeNodes",
       "fingerprint": "internal/config/merge.go:HISS-01:fn:mergeNodes#1"
     }
