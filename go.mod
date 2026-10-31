@@ -7,7 +7,7 @@ require (
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/fxamacker/cbor/v2 v2.9.1
+	github.com/fxamacker/cbor/v2 v2.9.6
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/itchyny/gojq v0.12.19
