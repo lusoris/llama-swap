@@ -1,0 +1,49 @@
+name: Validate Renovate config
+
+on:
+  pull_request:
+    paths:
+      - "renovate.json"
+      - "docker/unified/build-image.sh"
+      - "renovate_config_test.go"
+      - ".github/workflows/renovate-config.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "renovate.json"
+      - "docker/unified/build-image.sh"
+      - "renovate_config_test.go"
+      - ".github/workflows/renovate-config.yml"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/renovatebot/renovate:44.200.0@sha256:8639eca545119147ce9114c22315129dd52794b3ea8a6767f8b0bd22606545c4
+      options: --user root
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Validate Renovate configuration
+        run: renovate-config-validator --strict renovate.json
+
+  manager-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c #6.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: Run Renovate CUDA manager tests
+        run: go test . -run 'TestRenovateCUDA' -count=1 -v
