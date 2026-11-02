@@ -121,7 +121,7 @@ func ensureDeployment(ctx context.Context, client kubernetes.Interface, cfg *ser
 			return false, err
 		}
 		if !deploymentSpecMatches(dep, want) {
-			log.Printf("deployment %s/%s exists but spec drifted; replacing (--strict)", cfg.Namespace, depName)
+			logf("deployment %s/%s exists but spec drifted; replacing (--strict)", cfg.Namespace, depName)
 			if err := client.AppsV1().Deployments(cfg.Namespace).Delete(ctx, depName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 				return false, fmt.Errorf("deleting drifted deployment %s: %w", depName, err)
 			}
@@ -155,7 +155,7 @@ func ensureService(ctx context.Context, client kubernetes.Interface, cfg *serveC
 			return fmt.Errorf("adopting service %s/%s: %w", cfg.Namespace, svcName, err)
 		}
 		if want := cfg.renderService(); !serviceSpecMatches(svc, want) {
-			log.Printf("service %s/%s exists but spec drifted (selector/ports); updating", cfg.Namespace, svcName)
+			logf("service %s/%s exists but spec drifted (selector/ports); updating", cfg.Namespace, svcName)
 			svc.Spec.Selector = want.Spec.Selector
 			svc.Spec.Ports = want.Spec.Ports
 			if _, err := client.CoreV1().Services(cfg.Namespace).Update(ctx, svc, metav1.UpdateOptions{}); err != nil && !apierrors.IsNotFound(err) {
@@ -666,9 +666,9 @@ func serveCmd(ctx context.Context, args []string) error {
 		return err
 	}
 	if res.Adopted {
-		log.Printf("adopting existing deployment %s/%s", cfg.Namespace, cfg.DepName)
+		logf("adopting existing deployment %s/%s", cfg.Namespace, cfg.DepName)
 	} else {
-		log.Printf("created %v", res.Created)
+		logf("created %v", res.Created)
 	}
 
 	s := newServer(cfg, client, f.upstream, f.noLogs, f.poll, f.proxyResponseTimeout)
@@ -677,7 +677,7 @@ func serveCmd(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listening on %s: %w", f.listen, err)
 	}
-	log.Printf("kubeswap serve: model=%s namespace=%s upstream=%s listening on %s",
+	logf("kubeswap serve: model=%s namespace=%s upstream=%s listening on %s",
 		cfg.Model, cfg.Namespace, s.upstreamDescription(), f.listen)
 
 	return s.runUntilShutdown(ctx, ln)
@@ -915,9 +915,9 @@ func (s *server) requestStop() {
 func (s *server) setReady(ready bool, reason string) {
 	if ready != s.ready.Load() || reason != s.readyReason.Load().(string) {
 		if ready {
-			log.Printf("backend ready (%s)", reason)
+			logf("backend ready (%s)", reason)
 		} else if !s.ready.Load() {
-			log.Printf("backend not ready: %s", reason)
+			logf("backend not ready: %s", reason)
 		}
 		s.ready.Store(ready)
 		s.readyReason.Store(reason)
@@ -937,7 +937,7 @@ func (s *server) pollOnce(ctx context.Context) {
 	dep, err := s.client.AppsV1().Deployments(cfg.Namespace).Get(apiCtx, depName, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Printf("deployment %s/%s deleted, shutting down", cfg.Namespace, depName)
+			logf("deployment %s/%s deleted, shutting down", cfg.Namespace, depName)
 			s.setReady(false, "deployment deleted")
 			s.requestStop()
 		} else {
@@ -1062,7 +1062,7 @@ func podCrashState(p *corev1.Pod) (code int, desc string, failed bool) {
 // A crashed backend needs intervention, not time - waiting out
 // llama-swap's health-check timeout would only delay the same error.
 func (s *server) fail(code int, desc string) {
-	log.Printf("model %q: backend failing (%s); cleaning up and exiting with code %d", s.cfg.Model, desc, code)
+	logf("model %q: backend failing (%s); cleaning up and exiting with code %d", s.cfg.Model, desc, code)
 	s.setReady(false, "backend failing: "+desc)
 
 	// Flush the pod log stream so the crash output is visible; bound the
@@ -1098,14 +1098,14 @@ func (s *server) cleanupOwned() {
 	case apierrors.IsNotFound(err):
 		// already gone
 	case err != nil:
-		log.Printf("cleanup: getting deployment %s: %v", cfg.DepName, err)
+		logf("cleanup: getting deployment %s: %v", cfg.DepName, err)
 	default:
 		if err := verifyOwnership(dep, cfg.Model); err != nil {
-			log.Printf("cleanup: keeping deployment %s: %v", cfg.DepName, err)
+			logf("cleanup: keeping deployment %s: %v", cfg.DepName, err)
 		} else if err := s.client.AppsV1().Deployments(cfg.Namespace).Delete(ctx, cfg.DepName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-			log.Printf("cleanup: deleting deployment %s: %v", cfg.DepName, err)
+			logf("cleanup: deleting deployment %s: %v", cfg.DepName, err)
 		} else {
-			log.Printf("cleanup: deleted deployment %s/%s", cfg.Namespace, cfg.DepName)
+			logf("cleanup: deleted deployment %s/%s", cfg.Namespace, cfg.DepName)
 		}
 	}
 
@@ -1114,14 +1114,14 @@ func (s *server) cleanupOwned() {
 	case apierrors.IsNotFound(err):
 		// no service to delete
 	case err != nil:
-		log.Printf("cleanup: getting service %s: %v", cfg.SvcName, err)
+		logf("cleanup: getting service %s: %v", cfg.SvcName, err)
 	default:
 		if err := verifyOwnership(svc, cfg.Model); err != nil {
-			log.Printf("cleanup: keeping service %s: %v", cfg.SvcName, err)
+			logf("cleanup: keeping service %s: %v", cfg.SvcName, err)
 		} else if err := s.client.CoreV1().Services(cfg.Namespace).Delete(ctx, cfg.SvcName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-			log.Printf("cleanup: deleting service %s: %v", cfg.SvcName, err)
+			logf("cleanup: deleting service %s: %v", cfg.SvcName, err)
 		} else {
-			log.Printf("cleanup: deleted service %s/%s", cfg.Namespace, cfg.SvcName)
+			logf("cleanup: deleted service %s/%s", cfg.Namespace, cfg.SvcName)
 		}
 	}
 }
