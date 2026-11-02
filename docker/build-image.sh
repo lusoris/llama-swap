@@ -130,7 +130,7 @@ get_default_branch() {
 # Function to get the latest release tag from a GitHub repo
 get_latest_release_tag() {
     local owner_repo="$1"
-    curl -fsSL "https://api.github.com/repos/${owner_repo}/releases/latest" \
+    curl -fsSL --max-time 60 --retry 3 "https://api.github.com/repos/${owner_repo}/releases/latest" \
         | grep '"tag_name"' | head -1 | cut -d'"' -f4
 }
 
