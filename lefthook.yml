@@ -53,6 +53,12 @@ pre-push:
         .config/lefthook/engine.sh security govuln; else echo govulncheck is not
         installed, install it with go install
         golang.org/x/vuln/cmd/govulncheck@latest >&2; exit 1; fi
+    secrets:
+      run: >-
+        if command -v gitleaks >/dev/null 2>&1; then sh
+        .config/lefthook/engine.sh security secrets; else echo gitleaks is not
+        installed, install it with go install
+        github.com/zricethezav/gitleaks/v8@v8.30.1 >&2; exit 1; fi
     flavor-audit:
       run: sh .config/lefthook/engine.sh flavor audit .
     audit:
