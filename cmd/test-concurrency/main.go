@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -10,9 +11,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-func main() {
-	prompt := flag.String("prompt", "Write a few sentences about the history of computing.", "user message sent to each model")
-	maxTokens := flag.Int("max-tokens", 256, "max_tokens per request")
+// parseFlags reads the flags; ok is false after the usage text was printed.
+func parseFlags() (baseURL string, models []string, prompt string, maxTokens int, ok bool) {
+	promptFlag := flag.String("prompt", "Write a few sentences about the history of computing.", "user message sent to each model")
+	maxTokensFlag := flag.Int("max-tokens", 256, "max_tokens per request")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] <base-url> <model> [model...]\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "Example: %s -max-tokens 400 http://localhost:8080 A B C D\n\n", os.Args[0])
@@ -23,24 +25,19 @@ func main() {
 	args := flag.Args()
 	if len(args) < 2 {
 		flag.Usage()
-		os.Exit(1)
+		return "", nil, "", 0, false
 	}
 
-	baseURL := args[0]
-	models := args[1:]
+	return args[0], args[1:], *promptFlag, *maxTokensFlag, true
+}
 
-	m := newModel(models)
-	prog := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
-
+func dispatchRequests(ctx context.Context, prog *tea.Program, baseURL string, models []string, prompt string, maxTokens int, wg *sync.WaitGroup) {
 	// Chain of triggers ensures requests are sent in the order provided.
 	triggers := make([]chan struct{}, len(models))
 	for i := range triggers {
 		triggers[i] = make(chan struct{}, 1)
 	}
 	triggers[0] <- struct{}{}
-
-	var wg sync.WaitGroup
-	start := time.Now()
 
 	for i, name := range models {
 		wg.Add(1)
@@ -56,7 +53,7 @@ func main() {
 				triggers[idx+1] <- struct{}{}
 			}
 
-			err := sendRequest(baseURL, mdl, *prompt, *maxTokens, idx, func(i int, text string) {
+			err := sendRequest(ctx, baseURL, mdl, prompt, maxTokens, idx, func(i int, text string) {
 				prog.Send(deltaMsg{idx: i, text: text})
 			})
 
@@ -68,11 +65,31 @@ func main() {
 			}
 		}(i, name)
 	}
+}
+
+func main() {
+	baseURL, models, prompt, maxTokens, ok := parseFlags()
+	if !ok {
+		os.Exit(1)
+	}
+
+	m := newModel(models)
+	prog := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+
+	var wg sync.WaitGroup
+	start := time.Now()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dispatchRequests(ctx, prog, baseURL, models, prompt, maxTokens, &wg)
 
 	if _, err := prog.Run(); err != nil {
+		cancel()
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
+	cancel()
 
 	wg.Wait()
 	printSummary(m, start)

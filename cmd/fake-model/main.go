@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -107,7 +106,38 @@ func sendChunk(w http.ResponseWriter, content string, finishReason *string) erro
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(w, "data: %s\n\n", data)
+	err = writeSSE(w, data)
+	return err
+}
+
+// sendRoleChunk writes the initial assistant role delta chunk to the stream.
+func sendRoleChunk(w http.ResponseWriter) error {
+	first := chatChunk{
+		ID:      "chatcmpl-fake",
+		Object:  "chat.completion.chunk",
+		Created: time.Now().Unix(),
+		Model:   "fake-model",
+		Choices: []chunkChoice{
+			{Index: 0, Delta: chunkDelta{Role: "assistant"}},
+		},
+	}
+	data, err := json.Marshal(first)
+	if err != nil {
+		return err
+	}
+	err = writeSSE(w, data)
+	return err
+}
+
+// writeSSE writes one SSE data event.
+func writeSSE(w io.Writer, data []byte) error {
+	_, err := io.WriteString(w, "data: "+string(data)+"\n\n")
+	return err
+}
+
+// sendDoneChunk writes the SSE stream termination chunk.
+func sendDoneChunk(w http.ResponseWriter) error {
+	err := writeSSE(w, []byte("[DONE]"))
 	return err
 }
 
@@ -125,12 +155,14 @@ func startLoading(loadDur time.Duration) <-chan struct{} {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 		timer := time.NewTimer(loadDur)
-		for {
+		defer timer.Stop()
+		var done bool
+		for !done {
 			select {
 			case <-timer.C:
 				close(ready)
 				log.Printf("ready")
-				return
+				done = true
 			case <-ticker.C:
 				if rem := time.Until(deadline).Round(time.Second); rem > 0 {
 					log.Printf("loading... %s remaining", rem)
@@ -150,6 +182,86 @@ func healthHandler(ready <-chan struct{}) http.HandlerFunc {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		}
 	}
+}
+
+func handleNonStreaming(w http.ResponseWriter, ctx context.Context, tokens int, tps float64) {
+	delay := time.Duration(float64(tokens) / tps * float64(time.Second))
+	select {
+	case <-time.After(delay):
+	case <-ctx.Done():
+		return
+	}
+	text := loremText(tokens)
+	resp := chatCompletion{
+		ID:      "chatcmpl-fake",
+		Object:  "chat.completion",
+		Created: time.Now().Unix(),
+		Model:   "fake-model",
+		Choices: []completionChoice{
+			{
+				Index:        0,
+				Message:      completionMessage{Role: "assistant", Content: text},
+				FinishReason: "stop",
+			},
+		},
+		Usage: completionUsage{
+			PromptTokens:     0,
+			CompletionTokens: tokens,
+			TotalTokens:      tokens,
+		},
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("encode response error: %v", err)
+	}
+}
+
+func handleStreaming(w http.ResponseWriter, ctx context.Context, tokens int, tps float64) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// Send role delta first
+	if err := sendRoleChunk(w); err != nil {
+		return
+	}
+	flusher.Flush()
+
+	interval := time.Duration(float64(time.Second) / tps)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	stop := "stop"
+	for i := 0; i < tokens; i++ {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+
+		word := loremWords[i%len(loremWords)]
+		if i < tokens-1 {
+			if err := sendChunk(w, word+" ", nil); err != nil {
+				return
+			}
+		} else {
+			if err := sendChunk(w, word, &stop); err != nil {
+				return
+			}
+		}
+		flusher.Flush()
+	}
+
+	if err := sendDoneChunk(w); err != nil {
+		return
+	}
+	flusher.Flush()
 }
 
 func chatHandler(ready <-chan struct{}) http.HandlerFunc {
@@ -181,88 +293,11 @@ func chatHandler(ready <-chan struct{}) http.HandlerFunc {
 		}
 
 		if !streaming {
-			delay := time.Duration(float64(tokens) / tps * float64(time.Second))
-			select {
-			case <-time.After(delay):
-			case <-ctx.Done():
-				return
-			}
-			text := loremText(tokens)
-			resp := chatCompletion{
-				ID:      "chatcmpl-fake",
-				Object:  "chat.completion",
-				Created: time.Now().Unix(),
-				Model:   "fake-model",
-				Choices: []completionChoice{
-					{
-						Index:        0,
-						Message:      completionMessage{Role: "assistant", Content: text},
-						FinishReason: "stop",
-					},
-				},
-				Usage: completionUsage{
-					PromptTokens:     0,
-					CompletionTokens: tokens,
-					TotalTokens:      tokens,
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(resp)
+			handleNonStreaming(w, ctx, tokens, tps)
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			http.Error(w, "streaming not supported", http.StatusInternalServerError)
-			return
-		}
-
-		// Send role delta first
-		first := chatChunk{
-			ID:      "chatcmpl-fake",
-			Object:  "chat.completion.chunk",
-			Created: time.Now().Unix(),
-			Model:   "fake-model",
-			Choices: []chunkChoice{
-				{Index: 0, Delta: chunkDelta{Role: "assistant"}},
-			},
-		}
-		if data, err := json.Marshal(first); err == nil {
-			fmt.Fprintf(w, "data: %s\n\n", data)
-			flusher.Flush()
-		}
-
-		interval := time.Duration(float64(time.Second) / tps)
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-
-		stop := "stop"
-		for i := 0; i < tokens; i++ {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-			}
-
-			word := loremWords[i%len(loremWords)]
-			if i < tokens-1 {
-				if err := sendChunk(w, word+" ", nil); err != nil {
-					return
-				}
-			} else {
-				if err := sendChunk(w, word, &stop); err != nil {
-					return
-				}
-			}
-			flusher.Flush()
-		}
-
-		fmt.Fprintf(w, "data: [DONE]\n\n")
-		flusher.Flush()
+		handleStreaming(w, ctx, tokens, tps)
 	}
 }
 
