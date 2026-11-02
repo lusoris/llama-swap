@@ -84,8 +84,12 @@ fetch_llama_tag() {
     while [ "$page" -le 50 ]; do
         log_debug "Fetching page $page for tag prefix: $tag_prefix"
 
-        local response=$(curl -s --max-time 60 --retry 3 -H "Authorization: Bearer $GITHUB_TOKEN" \
-            "https://api.github.com/users/ggml-org/packages/container/llama.cpp/versions?per_page=${per_page}&page=${page}")
+        local response
+        if ! response=$(curl -fsS --max-time 60 --retry 3 -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "https://api.github.com/users/ggml-org/packages/container/llama.cpp/versions?per_page=${per_page}&page=${page}"); then
+            log_info "GitHub API request failed for page $page (tag prefix: $tag_prefix)"
+            return 1
+        fi
 
         # Check for API errors
         if echo "$response" | jq -e '.message' > /dev/null 2>&1; then
