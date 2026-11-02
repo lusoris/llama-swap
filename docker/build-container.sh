@@ -63,7 +63,7 @@ LS_BINARY_REPO=${LS_BINARY_REPO:-mostlygeek/llama-swap}
 # Authenticated request — unauth'd github.com API is 60/hr per IP and GHA
 # runners share IPs, so the call regularly returns rate-limit JSON and
 # `.tag_name` then resolves to "null", producing a bogus `vnull` URL below.
-LS_VER=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+LS_VER=$(curl -s --max-time 60 --retry 3 -H "Authorization: Bearer $GITHUB_TOKEN" \
     "https://api.github.com/repos/${LS_BINARY_REPO}/releases/latest" \
     | jq -r .tag_name | sed 's/v//')
 
@@ -81,11 +81,15 @@ fetch_llama_tag() {
     local page=1
     local per_page=100
 
-    while true; do
+    while [ "$page" -le 50 ]; do
         log_debug "Fetching page $page for tag prefix: $tag_prefix"
 
-        local response=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
-            "https://api.github.com/users/ggml-org/packages/container/llama.cpp/versions?per_page=${per_page}&page=${page}")
+        local response
+        if ! response=$(curl -fsS --max-time 60 --retry 3 -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "https://api.github.com/users/ggml-org/packages/container/llama.cpp/versions?per_page=${per_page}&page=${page}"); then
+            log_info "GitHub API request failed for page $page (tag prefix: $tag_prefix)"
+            return 1
+        fi
 
         # Check for API errors
         if echo "$response" | jq -e '.message' > /dev/null 2>&1; then

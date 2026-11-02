@@ -157,8 +157,10 @@ jobs:
       - name: Set up helm
         run: |
           if ! command -v helm >/dev/null; then
-            curl -fsSL https://get.helm.sh/helm-v3.19.0-linux-amd64.tar.gz \
-              | sudo tar xz --strip-components=1 -C /usr/local/bin
+            helm_tgz="$(mktemp)"
+            curl -fsSL --max-time 300 --retry 3 -o "$helm_tgz" https://get.helm.sh/helm-v3.19.0-linux-amd64.tar.gz
+            sudo tar xzf "$helm_tgz" --strip-components=1 -C /usr/local/bin
+            rm -f "$helm_tgz"
           fi
           helm version --short
 

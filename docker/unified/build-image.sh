@@ -806,11 +806,17 @@ echo "audio.cpp verified: deployment build (compiled model spec catalog), eSpeak
 # too, so its line is filtered out first -- otherwise this would pass on our own
 # echo without the binary ever having received the flag.
 #
-# The container exits non-zero here by design, so the output is captured rather
+# The container must exit non-zero here by design (nonexistent config); that
+# expected exit status is asserted directly below. The output is captured rather
 # than piped: under `set -o pipefail` a pipeline would report the expected
 # failure as a failed check.
 ENTRYPOINT_PROBE="/nonexistent/llama-swap-env-probe.yaml"
-PROBE_OUT="$(docker run --rm -e "LLAMA_SWAP_CONFIG=${ENTRYPOINT_PROBE}" "${RUNTIME_TAG}" 2>&1 || true)"
+if PROBE_OUT="$(docker run --rm -e "LLAMA_SWAP_CONFIG=${ENTRYPOINT_PROBE}" "${RUNTIME_TAG}" 2>&1)"; then
+    echo "ERROR: entrypoint probe exited 0 with a nonexistent config"
+    echo "Container output:"
+    echo "${PROBE_OUT}"
+    exit 1
+fi
 if ! grep -v '^run\.sh:' <<<"${PROBE_OUT}" | grep -qF -- "${ENTRYPOINT_PROBE}"; then
     echo "ERROR: LLAMA_SWAP_CONFIG did not reach llama-swap as -config;"
     echo "       run.sh is not translating environment variables into flags."
@@ -825,7 +831,12 @@ fi
 # drifting into something unloadable. This calls llama-swap directly with
 # arguments (bypassing run.sh's env-var mapping, which does not cover
 # -validate -- see run.sh for why) at the same path run.sh defaults -config to.
-VALIDATE_OUT="$(docker run --rm "${RUNTIME_TAG}" -config /etc/llama-swap/config/config.yaml -validate 2>&1 || true)"
+if ! VALIDATE_OUT="$(docker run --rm "${RUNTIME_TAG}" -config /etc/llama-swap/config/config.yaml -validate 2>&1)"; then
+    echo "ERROR: config validate exited non-zero"
+    echo "Container output:"
+    echo "${VALIDATE_OUT}"
+    exit 1
+fi
 if ! grep -q "config is valid" <<<"${VALIDATE_OUT}"; then
     echo "ERROR: the config shipped at /etc/llama-swap/config/config.yaml does not load,"
     echo "       so this image exits immediately when run with nothing mounted."

@@ -1,26 +1,10 @@
 {
   "version": 1,
-  "generated_at": "2026-10-18T03:19:45Z",
+  "generated_at": "2026-11-02T02:42:08Z",
   "repository": "lusoris/llama-swap",
-  "commit_sha": "2e9cf82be58630f9a2ec79bb930fe64c71d20760",
-  "total_infractions": 274,
+  "commit_sha": "03f0daa2b85004427273275e46b3d35bf45d36ca",
+  "total_infractions": 266,
   "infractions": [
-    {
-      "rule_id": "HISS-02",
-      "file_path": ".github/workflows/go-ci.yml",
-      "line_number": 87,
-      "message": "curl without --max-time waits on the network without a deadline",
-      "anchor": "text:a501b70380b1",
-      "fingerprint": ".github/workflows/go-ci.yml:HISS-02:text:a501b70380b1#1"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": ".github/workflows/publish-chart.yml",
-      "line_number": 160,
-      "message": "curl without --max-time waits on the network without a deadline",
-      "anchor": "text:a501b70380b1",
-      "fingerprint": ".github/workflows/publish-chart.yml:HISS-02:text:a501b70380b1#1"
-    },
     {
       "rule_id": "HISS-02",
       "file_path": "cmd/fake-model/main.go",
@@ -391,54 +375,6 @@
       "message": "net.DialUDP takes no context, so no deadline bounds it; use net.Dialer.DialContext",
       "anchor": "fn:sendMagicPacket",
       "fingerprint": "cmd/wol-proxy/wol-proxy.go:HISS-02:fn:sendMagicPacket#1"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": "docker/build-container.sh",
-      "line_number": 66,
-      "message": "curl without --max-time waits on the network without a deadline",
-      "anchor": "text:2716f287b07b",
-      "fingerprint": "docker/build-container.sh:HISS-02:text:2716f287b07b#1"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": "docker/build-container.sh",
-      "line_number": 84,
-      "message": "Unbounded loop in shell without an explicit scalar bound",
-      "anchor": "fn:fetch_llama_tag",
-      "fingerprint": "docker/build-container.sh:HISS-02:fn:fetch_llama_tag#1"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": "docker/build-container.sh",
-      "line_number": 87,
-      "message": "curl without --max-time waits on the network without a deadline",
-      "anchor": "fn:fetch_llama_tag",
-      "fingerprint": "docker/build-container.sh:HISS-02:fn:fetch_llama_tag#2"
-    },
-    {
-      "rule_id": "HISS-02",
-      "file_path": "docker/build-image.sh",
-      "line_number": 133,
-      "message": "curl without --max-time waits on the network without a deadline",
-      "anchor": "fn:get_latest_release_tag",
-      "fingerprint": "docker/build-image.sh:HISS-02:fn:get_latest_release_tag#1"
-    },
-    {
-      "rule_id": "HISS-07",
-      "file_path": "docker/unified/build-image.sh",
-      "line_number": 813,
-      "message": "'|| true' discards the command's failure; handle the exit status or test the condition instead",
-      "anchor": "text:cdb6d32bf937",
-      "fingerprint": "docker/unified/build-image.sh:HISS-07:text:cdb6d32bf937#1"
-    },
-    {
-      "rule_id": "HISS-07",
-      "file_path": "docker/unified/build-image.sh",
-      "line_number": 828,
-      "message": "'|| true' discards the command's failure; handle the exit status or test the condition instead",
-      "anchor": "text:7205987ead90",
-      "fingerprint": "docker/unified/build-image.sh:HISS-07:text:7205987ead90#1"
     },
     {
       "rule_id": "HISS-07",
@@ -2352,7 +2288,7 @@
       "file_path": "internal/config/merge.go",
       "line_number": 165,
       "symbol": "mergeNodes",
-      "message": "Call cycle through mergeNodes -> mergeValue -> mergeNodes; the call graph must form an acyclic DAG",
+      "message": "Call cycle through mergeNodes -\u003e mergeValue -\u003e mergeNodes; the call graph must form an acyclic DAG",
       "anchor": "fn:mergeNodes",
       "fingerprint": "internal/config/merge.go:HISS-01:fn:mergeNodes#1"
     }
