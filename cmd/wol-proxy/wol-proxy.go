@@ -387,11 +387,9 @@ func (p *proxyServer) handleStatus(w http.ResponseWriter) {
 	failCount := p.getFailures()
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	if _, err := fmt.Fprintf(w, "status: %s\n", status); err != nil {
+	body := fmt.Sprintf("status: %s\nfailures: %d\n", status, failCount)
+	if _, err := io.WriteString(w, body); err != nil {
 		slog.Debug("failed to write status response", "error", err)
-	}
-	if _, err := fmt.Fprintf(w, "failures: %d\n", failCount); err != nil {
-		slog.Debug("failed to write status failures response", "error", err)
 	}
 }
 
@@ -423,7 +421,7 @@ func isRootOrUI(path string) bool {
 func writeHTML(w http.ResponseWriter, status int, html string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	if _, err := fmt.Fprint(w, html); err != nil {
+	if _, err := io.WriteString(w, html); err != nil {
 		slog.Debug("failed to write html response", "error", err)
 	}
 }
@@ -518,9 +516,7 @@ func (p *proxyServer) handleWakeProgress(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, p.loadingPage())
+	writeHTML(w, http.StatusOK, p.loadingPage())
 }
 
 // loadingPage returns the loading page with the duration of the last wake, so
