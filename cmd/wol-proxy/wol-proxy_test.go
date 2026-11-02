@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -144,5 +146,62 @@ func TestProxy_StaleWakeIsNotTracked(t *testing.T) {
 	p.setStatus(ready)
 	if d := p.lastWakeDuration(); d != 0 {
 		t.Fatalf("stale wake should be discarded, got %v", d)
+	}
+}
+
+func TestBuildMagicPacket_Valid(t *testing.T) {
+	mac := "00:11:22:33:44:55"
+	packet, err := buildMagicPacket(mac)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(packet) != 102 {
+		t.Fatalf("expected packet length 102, got %d", len(packet))
+	}
+	for i := 0; i < 6; i++ {
+		if packet[i] != 0xFF {
+			t.Fatalf("expected 0xFF at index %d, got 0x%02X", i, packet[i])
+		}
+	}
+	expectedPayload := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
+	for i := 1; i <= 16; i++ {
+		chunk := packet[i*6 : (i+1)*6]
+		if !bytes.Equal(chunk, expectedPayload) {
+			t.Fatalf("repetition %d mismatch: got %v, want %v", i, chunk, expectedPayload)
+		}
+	}
+}
+
+func TestBuildMagicPacket_Invalid(t *testing.T) {
+	for _, tc := range []string{"", "invalid", "00:11:22:33:44:55:66:77"} {
+		if _, err := buildMagicPacket(tc); err == nil {
+			t.Fatalf("expected error for MAC %q, got nil", tc)
+		}
+	}
+}
+
+func TestSendMagicPacket_InvalidMAC(t *testing.T) {
+	if err := sendMagicPacket("invalid-mac"); err == nil {
+		t.Fatal("expected error for invalid MAC, got nil")
+	}
+}
+
+func TestWaitForReady_Timeout(t *testing.T) {
+	p := newTestProxy(t, false)
+	ctx := context.Background()
+	if p.waitForReady(ctx, 10*time.Millisecond) {
+		t.Fatal("expected waitForReady to return false on timeout")
+	}
+}
+
+func TestWaitForReady_BecomesReady(t *testing.T) {
+	p := newTestProxy(t, false)
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		p.setStatus(ready)
+	}()
+	ctx := context.Background()
+	if !p.waitForReady(ctx, 1*time.Second) {
+		t.Fatal("expected waitForReady to return true once ready")
 	}
 }
