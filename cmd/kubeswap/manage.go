@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,61 +52,22 @@ func deleteModel(ctx context.Context, client kubernetes.Interface, namespace, mo
 		return err
 	}
 
-	// Lookups are by exact name, never by the coarse model label, so
-	// sibling models that sanitize to the same string are out of reach.
-	deleted := false
-	dep, err := client.AppsV1().Deployments(namespace).Get(ctx, depName, metav1.GetOptions{})
-	switch {
-	case apierrors.IsNotFound(err):
-		// not loaded
-	case err != nil:
-		return fmt.Errorf("getting deployment %s: %w", depName, err)
-	default:
-		if err := verifyOwnership(dep, model); err != nil {
-			return err
-		}
-		if err := client.AppsV1().Deployments(namespace).Delete(ctx, depName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("deleting deployment %s: %w", depName, err)
-		}
-		log.Printf("deleted deployment %s/%s", namespace, depName)
-		deleted = true
+	depDeleted, err := deleteModelDeployment(ctx, client, namespace, depName, model)
+	if err != nil {
+		return err
 	}
-
-	svc, err := client.CoreV1().Services(namespace).Get(ctx, svcName, metav1.GetOptions{})
-	switch {
-	case apierrors.IsNotFound(err):
-		// no service to delete
-	case err != nil:
-		return fmt.Errorf("getting service %s: %w", svcName, err)
-	default:
-		if err := verifyOwnership(svc, model); err != nil {
-			return err
-		}
-		if err := client.CoreV1().Services(namespace).Delete(ctx, svcName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("deleting service %s: %w", svcName, err)
-		}
-		log.Printf("deleted service %s/%s", namespace, svcName)
-		deleted = true
+	svcDeleted, err := deleteModelService(ctx, client, namespace, svcName, model)
+	if err != nil {
+		return err
 	}
+	deleted := depDeleted || svcDeleted
 
 	if deleteVolumes {
-		// Only PVCs kubeswap itself created carry the model label;
-		// user-managed claims (e.g. a shared model cache) are untouched.
-		selector := labels.Set(managedLabels(sanitized)).String()
-		pvcs, err := client.CoreV1().PersistentVolumeClaims(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+		pvcDeleted, err := deleteModelPVCs(ctx, client, namespace, sanitized, model)
 		if err != nil {
-			return fmt.Errorf("listing PVCs: %w", err)
+			return err
 		}
-		for i := range pvcs.Items {
-			if err := verifyOwnership(&pvcs.Items[i], model); err != nil {
-				return err
-			}
-			if err := client.CoreV1().PersistentVolumeClaims(namespace).Delete(ctx, pvcs.Items[i].Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-				return fmt.Errorf("deleting PVC %s: %w", pvcs.Items[i].Name, err)
-			}
-			log.Printf("deleted PVC %s/%s", namespace, pvcs.Items[i].Name)
-			deleted = true
-		}
+		deleted = deleted || pvcDeleted
 	}
 
 	if !deleted {
@@ -121,6 +83,66 @@ func deleteModel(ctx context.Context, client kubernetes.Interface, namespace, mo
 	return nil
 }
 
+func deleteModelDeployment(ctx context.Context, client kubernetes.Interface, namespace, depName, model string) (bool, error) {
+	dep, err := client.AppsV1().Deployments(namespace).Get(ctx, depName, metav1.GetOptions{})
+	switch {
+	case apierrors.IsNotFound(err):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("getting deployment %s: %w", depName, err)
+	default:
+		if err := verifyOwnership(dep, model); err != nil {
+			return false, err
+		}
+		if err := client.AppsV1().Deployments(namespace).Delete(ctx, depName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			return false, fmt.Errorf("deleting deployment %s: %w", depName, err)
+		}
+		log.Printf("deleted deployment %s/%s", namespace, depName)
+		return true, nil
+	}
+}
+
+func deleteModelService(ctx context.Context, client kubernetes.Interface, namespace, svcName, model string) (bool, error) {
+	svc, err := client.CoreV1().Services(namespace).Get(ctx, svcName, metav1.GetOptions{})
+	switch {
+	case apierrors.IsNotFound(err):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("getting service %s: %w", svcName, err)
+	default:
+		if err := verifyOwnership(svc, model); err != nil {
+			return false, err
+		}
+		if err := client.CoreV1().Services(namespace).Delete(ctx, svcName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			return false, fmt.Errorf("deleting service %s: %w", svcName, err)
+		}
+		log.Printf("deleted service %s/%s", namespace, svcName)
+		return true, nil
+	}
+}
+
+func deleteModelPVCs(ctx context.Context, client kubernetes.Interface, namespace, sanitized, model string) (bool, error) {
+	// Only PVCs kubeswap itself created carry the model label;
+	// user-managed claims (e.g. a shared model cache) are untouched.
+	selector := labels.Set(managedLabels(sanitized)).String()
+	pvcs, err := client.CoreV1().PersistentVolumeClaims(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+	if err != nil {
+		return false, fmt.Errorf("listing PVCs: %w", err)
+	}
+	deleted := false
+	for i := range pvcs.Items {
+		if err := verifyOwnership(&pvcs.Items[i], model); err != nil {
+			return false, err
+		}
+		if err := client.CoreV1().PersistentVolumeClaims(namespace).Delete(ctx, pvcs.Items[i].Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			return false, fmt.Errorf("deleting PVC %s: %w", pvcs.Items[i].Name, err)
+		}
+		log.Printf("deleted PVC %s/%s", namespace, pvcs.Items[i].Name)
+		deleted = true
+	}
+	return deleted, nil
+}
+
 // waitForPodsGone polls until no pod objects for the model remain (the
 // deployment deletion cascades, but we wait so cmdStop returns after the
 // GPU is free). A pod that merely has a deletion timestamp is still
@@ -130,7 +152,7 @@ func deleteModel(ctx context.Context, client kubernetes.Interface, namespace, mo
 func waitForPodsGone(ctx context.Context, client kubernetes.Interface, namespace, sanitized, depName string, timeout time.Duration) error {
 	selector := labels.Set(podSelectorLabels(sanitized, depName)).String()
 	deadline := time.Now().Add(timeout)
-	for {
+	for ctx.Err() == nil {
 		// Per-iteration bound: a hung List must not stall the loop past
 		// its deadline.
 		callCtx, cancel := context.WithTimeout(ctx, apiCallTimeout)
@@ -148,6 +170,7 @@ func waitForPodsGone(ctx context.Context, client kubernetes.Interface, namespace
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
+	return ctx.Err()
 }
 
 // deleteCmd Implements the delete subcommand: tears down a model's backend Deployment and Service (and, with --delete-volumes, the PVCs kubeswap created).
@@ -336,7 +359,7 @@ func runStatusWithClient(ctx context.Context, client kubernetes.Interface, names
 	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	for {
+	for ctx.Err() == nil {
 		select {
 		case <-ctx.Done():
 			return nil
@@ -349,30 +372,15 @@ func runStatusWithClient(ctx context.Context, client kubernetes.Interface, names
 			}
 		}
 	}
+	return nil
 }
 
-// runStatusWithClient prints the status table and, with watch, refreshes it
-// on a ticker until ctx is done. A transient API error in the loop is
-// printed but does not kill the watch; the initial print failing is an
-// error (there is nothing to watch yet).
-func statusOnce(ctx context.Context, client kubernetes.Interface, namespace string) error {
-	managed := labels.Set(map[string]string{labelManagedBy: managedByValue}).String()
-	deps, err := client.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{LabelSelector: managed})
-	if err != nil {
-		return fmt.Errorf("listing managed deployments: %w", err)
-	}
-	if len(deps.Items) == 0 {
-		fmt.Printf("no managed workloads in namespace %s\n", namespace)
-		return nil
-	}
+type statusRow struct{ model, dep, pod, ready, age, reason string }
 
-	pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: managed})
-	if err != nil {
-		return fmt.Errorf("listing pods: %w", err)
-	}
+func buildPodByModel(pods []corev1.Pod) map[string]*corev1.Pod {
 	podByModel := map[string]*corev1.Pod{}
-	for i := range pods.Items {
-		p := &pods.Items[i]
+	for i := range pods {
+		p := &pods[i]
 		if p.DeletionTimestamp != nil {
 			continue
 		}
@@ -387,15 +395,13 @@ func statusOnce(ctx context.Context, client kubernetes.Interface, namespace stri
 			podByModel[key] = p
 		}
 	}
+	return podByModel
+}
 
-	// Column widths adapt to the content: model IDs and the
-	// hash-suffixed deployment/pod names can run to 60+ characters and
-	// are printed in full (REASON stays a bounded summary; the full
-	// text is one `kubeswap logs` away).
-	type statusRow struct{ model, dep, pod, ready, age, reason string }
-	rows := make([]statusRow, 0, len(deps.Items))
-	for i := range deps.Items {
-		dep := &deps.Items[i]
+func buildStatusRows(deps []appsv1.Deployment, podByModel map[string]*corev1.Pod) []statusRow {
+	rows := make([]statusRow, 0, len(deps))
+	for i := range deps {
+		dep := &deps[i]
 		model := dep.Annotations[annotationModelID]
 		if model == "" {
 			model = dep.Labels[labelModel]
@@ -417,7 +423,10 @@ func statusOnce(ctx context.Context, client kubernetes.Interface, namespace stri
 		}
 		rows = append(rows, statusRow{model, dep.Name, podName, ready, age, reason})
 	}
+	return rows
+}
 
+func printStatusTable(rows []statusRow) {
 	headers := []string{"MODEL", "DEPLOYMENT", "POD", "READY", "AGE", "REASON"}
 	widths := make([]int, len(headers))
 	for i, h := range headers {
@@ -444,6 +453,30 @@ func statusOnce(ctx context.Context, client kubernetes.Interface, namespace stri
 	for _, r := range rows {
 		printRow(r.model, r.dep, r.pod, r.ready, r.age, r.reason)
 	}
+}
+
+// runStatusWithClient prints the status table and, with watch, refreshes it
+// on a ticker until ctx is done. A transient API error in the loop is
+// printed but does not kill the watch; the initial print failing is an
+// error (there is nothing to watch yet).
+func statusOnce(ctx context.Context, client kubernetes.Interface, namespace string) error {
+	managed := labels.Set(map[string]string{labelManagedBy: managedByValue}).String()
+	deps, err := client.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{LabelSelector: managed})
+	if err != nil {
+		return fmt.Errorf("listing managed deployments: %w", err)
+	}
+	if len(deps.Items) == 0 {
+		fmt.Printf("no managed workloads in namespace %s\n", namespace)
+		return nil
+	}
+
+	pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: managed})
+	if err != nil {
+		return fmt.Errorf("listing pods: %w", err)
+	}
+	podByModel := buildPodByModel(pods.Items)
+	rows := buildStatusRows(deps.Items, podByModel)
+	printStatusTable(rows)
 	return nil
 }
 
@@ -515,6 +548,9 @@ func startupWindowFromSpec(p *corev1.Pod, container string) time.Duration {
 // to "still not ready" (something is wrong).
 const stuckRunningThreshold = 5 * time.Minute
 
+// defaultLogsTimeout bounds a non-follow log retrieval request.
+const defaultLogsTimeout = 30 * time.Second
+
 // logsCmd Implements the logs subcommand: prints (and, with --follow, streams) the backend container logs of a model's pod.
 func logsCmd(args []string) error {
 	var (
@@ -537,7 +573,16 @@ func logsCmd(args []string) error {
 	if err != nil {
 		return err
 	}
-	return runLogs(context.Background(), client, f.namespace, model, tail, follow)
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if follow {
+		// Log streaming follows until interrupted; each connection is bounded by the caller.
+		ctx, cancel = signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	} else {
+		ctx, cancel = context.WithTimeout(context.Background(), defaultLogsTimeout)
+	}
+	defer cancel()
+	return runLogs(ctx, client, f.namespace, model, tail, follow)
 }
 
 // runLogs finds the model's pod and copies the backend container's logs to

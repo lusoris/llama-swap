@@ -51,8 +51,7 @@ type serveConfig struct {
 	Strict       bool
 }
 
-// renderDeployment builds the model's Deployment.
-func (c *serveConfig) renderDeployment() (*appsv1.Deployment, error) {
+func (c *serveConfig) renderDeploymentLabels() (map[string]string, map[string]string) {
 	depLabels := map[string]string{labelAppName: appNameValue}
 	for k, v := range managedLabels(c.Sanitized) {
 		depLabels[k] = v
@@ -65,20 +64,19 @@ func (c *serveConfig) renderDeployment() (*appsv1.Deployment, error) {
 	for k, v := range c.ExtraLabels {
 		podTemplateLabels[k] = v
 	}
+	return depLabels, podTemplateLabels
+}
 
-	resources, err := c.renderResources()
-	if err != nil {
-		return nil, err
-	}
-
-	container := corev1.Container{
-		Name:      containerName,
-		Image:     c.Image,
-		Command:   c.Command,
-		Args:      c.Args,
-		Ports:     c.renderPorts(),
-		Env:       c.renderEnv(),
-		Resources: resources,
+func (c *serveConfig) renderContainer(resources corev1.ResourceRequirements, mounts []corev1.VolumeMount) corev1.Container {
+	return corev1.Container{
+		Name:         containerName,
+		Image:        c.Image,
+		Command:      c.Command,
+		Args:         c.Args,
+		Ports:        c.renderPorts(),
+		Env:          c.renderEnv(),
+		Resources:    resources,
+		VolumeMounts: mounts,
 		ReadinessProbe: &corev1.Probe{
 			ProbeHandler:        httpProbe(c.HealthPath, c.Port),
 			InitialDelaySeconds: 2,
@@ -103,24 +101,38 @@ func (c *serveConfig) renderDeployment() (*appsv1.Deployment, error) {
 			FailureThreshold: c.startupFailureThreshold(),
 		},
 	}
+}
+
+func (c *serveConfig) copyNodeSelector() map[string]string {
+	// Copies, not references: rendered objects must stay independent of the
+	// config (a later mutation of c.NodeSel must not rewrite a rendered
+	// Deployment, and two renders of one config must not share maps). An
+	// empty selector stays nil, as before.
+	if len(c.NodeSel) == 0 {
+		return nil
+	}
+	nodeSel := make(map[string]string, len(c.NodeSel))
+	for k, v := range c.NodeSel {
+		nodeSel[k] = v
+	}
+	return nodeSel
+}
+
+// renderDeployment builds the model's Deployment.
+func (c *serveConfig) renderDeployment() (*appsv1.Deployment, error) {
+	depLabels, podTemplateLabels := c.renderDeploymentLabels()
+
+	resources, err := c.renderResources()
+	if err != nil {
+		return nil, err
+	}
 
 	volumes, mounts, err := c.renderVolumes()
 	if err != nil {
 		return nil, err
 	}
-	container.VolumeMounts = mounts
-
-	// Copies, not references: rendered objects must stay independent of the
-	// config (a later mutation of c.NodeSel must not rewrite a rendered
-	// Deployment, and two renders of one config must not share maps). An
-	// empty selector stays nil, as before.
-	var nodeSel map[string]string
-	if len(c.NodeSel) > 0 {
-		nodeSel = make(map[string]string, len(c.NodeSel))
-		for k, v := range c.NodeSel {
-			nodeSel[k] = v
-		}
-	}
+	container := c.renderContainer(resources, mounts)
+	nodeSel := c.copyNodeSelector()
 	grace := c.GraceSeconds
 
 	annotations := map[string]string{annotationModelID: c.Model}
