@@ -170,7 +170,7 @@ func waitForPodsGone(ctx context.Context, client kubernetes.Interface, namespace
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	return ctx.Err()
+	return fmt.Errorf("listing pods: %w", ctx.Err())
 }
 
 // deleteCmd Implements the delete subcommand: tears down a model's backend Deployment and Service (and, with --delete-volumes, the PVCs kubeswap created).
@@ -347,6 +347,10 @@ func runStatus(namespace, kubeconfig string, watch bool, interval time.Duration)
 	return runStatusWithClient(context.Background(), client, namespace, watch, interval)
 }
 
+// runStatusWithClient prints the status table and, with watch, refreshes it
+// on a ticker until ctx is done. A transient API error in the loop is
+// printed but does not kill the watch; the initial print failing is an
+// error (there is nothing to watch yet).
 func runStatusWithClient(ctx context.Context, client kubernetes.Interface, namespace string, watch bool, interval time.Duration) error {
 	bounded, cancel := context.WithTimeout(ctx, apiCallTimeout)
 	err := statusOnce(bounded, client, namespace)
@@ -455,10 +459,7 @@ func printStatusTable(rows []statusRow) {
 	}
 }
 
-// runStatusWithClient prints the status table and, with watch, refreshes it
-// on a ticker until ctx is done. A transient API error in the loop is
-// printed but does not kill the watch; the initial print failing is an
-// error (there is nothing to watch yet).
+// statusOnce queries and prints the status table for managed workloads in namespace.
 func statusOnce(ctx context.Context, client kubernetes.Interface, namespace string) error {
 	managed := labels.Set(map[string]string{labelManagedBy: managedByValue}).String()
 	deps, err := client.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{LabelSelector: managed})
@@ -548,9 +549,6 @@ func startupWindowFromSpec(p *corev1.Pod, container string) time.Duration {
 // to "still not ready" (something is wrong).
 const stuckRunningThreshold = 5 * time.Minute
 
-// defaultLogsTimeout bounds a non-follow log retrieval request.
-const defaultLogsTimeout = 30 * time.Second
-
 // logsCmd Implements the logs subcommand: prints (and, with --follow, streams) the backend container logs of a model's pod.
 func logsCmd(args []string) error {
 	var (
@@ -579,7 +577,7 @@ func logsCmd(args []string) error {
 		// Log streaming follows until interrupted; each connection is bounded by the caller.
 		ctx, cancel = signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	} else {
-		ctx, cancel = context.WithTimeout(context.Background(), defaultLogsTimeout)
+		ctx, cancel = context.WithTimeout(context.Background(), apiCallTimeout)
 	}
 	defer cancel()
 	return runLogs(ctx, client, f.namespace, model, tail, follow)

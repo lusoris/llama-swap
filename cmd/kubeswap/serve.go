@@ -80,7 +80,7 @@ func waitForDeploymentGone(ctx context.Context, client kubernetes.Interface, nam
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	return ctx.Err()
+	return fmt.Errorf("checking deployment %s: %w", name, ctx.Err())
 }
 
 // verifyOwnership checks that obj was created by kubeswap for modelID.
@@ -737,7 +737,14 @@ func proxyTransport(responseHeaderTimeout time.Duration) *http.Transport {
 			Timeout:   30 * time.Second,
 			KeepAlive: 30 * time.Second,
 		}).DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+		// Bounds a wedged backend, not model loading: llama-swap
+		// only forwards once the check path reports the pod ready
+		// (startup probe passed), so this caps how long a ready
+		// backend may stall before producing response headers.
+		// Overridable per model (--proxy-response-timeout) because
+		// CPU image generation legitimately needs more than the
+		// default 300s for a single image.
 		ResponseHeaderTimeout: responseHeaderTimeout,
 		ExpectContinueTimeout: 1 * time.Second,
 		MaxIdleConns:          100,
@@ -1201,9 +1208,6 @@ func (s *server) stopLogsLocked() {
 	s.logUID = ""
 }
 
-// maxLogStreamRetries bounds consecutive retry attempts when opening a pod log stream fails.
-const maxLogStreamRetries = 60
-
 func (s *server) readLogStream(stream io.ReadCloser, podName string) {
 	defer func() {
 		if err := stream.Close(); err != nil {
@@ -1219,7 +1223,7 @@ func (s *server) readLogStream(stream io.ReadCloser, podName string) {
 
 // streamLogs Follows the backend pod logs and forwards them to stderr until the pod or the wrapper goes away.
 func (s *server) streamLogs(ctx context.Context, pod *corev1.Pod) {
-	for retry := 0; retry < maxLogStreamRetries && ctx.Err() == nil; retry++ {
+	for ctx.Err() == nil {
 		stream, err := s.client.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
 			Container: containerName,
 			Follow:    true,
