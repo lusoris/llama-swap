@@ -145,7 +145,6 @@ const (
 	maxReconnectDelay                    = 10 * time.Second
 	healthCheckInterval                  = 10 * time.Second
 	healthCheckTimeout                   = 5 * time.Second
-	slogTimeout                          = 1 * time.Second
 )
 
 type proxyServer struct {
@@ -169,9 +168,7 @@ func newProxyServer(url *url.URL) *proxyServer {
 	}
 }
 
-func isDebugEnabled() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), slogTimeout)
-	defer cancel()
+func isDebugEnabled(ctx context.Context) bool {
 	return slog.Default().Enabled(ctx, slog.LevelDebug)
 }
 
@@ -202,12 +199,13 @@ func connectSSE(ctx context.Context, client *http.Client, eventsURL string, apiK
 	return resp, nil
 }
 
-func readSSEEvents(body io.Reader) {
+func readSSEEvents(ctx context.Context, body io.Reader) {
 	scanner := bufio.NewScanner(body)
+	// use a fairly large buffer to avoid scanner errors when reading large SSE events
 	buf := make([]byte, 0, 1024*1024*2)
 	scanner.Buffer(buf, 1024*1024*2)
 	events := 0
-	debug := isDebugEnabled()
+	debug := isDebugEnabled(ctx)
 	if debug {
 		fmt.Print("Events: ")
 	}
@@ -218,6 +216,9 @@ func readSSEEvents(body io.Reader) {
 		}
 	}
 	fmt.Println()
+	if ctx.Err() != nil {
+		return
+	}
 	if err := scanner.Err(); err != nil {
 		slog.Error("error reading from SSE stream", "error", err)
 	}
@@ -261,11 +262,14 @@ func runSSEMonitor(ctx context.Context, proxy *proxyServer, eventsURL string, ap
 		reconnectDelay = 0
 		proxy.setSSEBody(resp.Body)
 
-		readSSEEvents(resp.Body)
+		readSSEEvents(ctx, resp.Body)
 
 		proxy.setSSEBody(nil)
 		if err := resp.Body.Close(); err != nil {
 			slog.Debug("failed to close SSE response body", "error", err)
+		}
+		if ctx.Err() != nil {
+			return
 		}
 		slog.Info("SSE connection closed, upstream not ready")
 		proxy.setStatus(notready)
@@ -273,6 +277,9 @@ func runSSEMonitor(ctx context.Context, proxy *proxyServer, eventsURL string, ap
 	}
 }
 
+// start a goroutine that periodically checks upstream liveness so a
+// silently dead connection (e.g. upstream suspended without a TCP close)
+// is detected and the upstream is marked not ready again
 func runHealthChecker(ctx context.Context, proxy *proxyServer, healthURL string) {
 	client := &http.Client{Timeout: healthCheckTimeout}
 	ticker := time.NewTicker(healthCheckInterval)
