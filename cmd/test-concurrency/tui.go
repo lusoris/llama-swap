@@ -90,67 +90,83 @@ func newModel(models []string) *model {
 
 func (m *model) Init() tea.Cmd { return nil }
 
+func (m *model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+	m.width = msg.Width
+	m.height = msg.Height
+	m.relayout()
+	m.refreshViewport(true)
+	return m, nil
+}
+
+func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c", "esc":
+		return m, tea.Quit
+	case "tab", "right", "l":
+		m.setFocus(m.focused + 1)
+		return m, nil
+	case "shift+tab", "left", "h":
+		m.setFocus(m.focused - 1)
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.vp, cmd = m.vp.Update(msg)
+	return m, cmd
+}
+
+func (m *model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+		if idx, ok := m.panelAt(msg.X, msg.Y); ok {
+			m.setFocus(idx)
+		}
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.vp, cmd = m.vp.Update(msg)
+	return m, cmd
+}
+
+func (m *model) handleDelta(msg deltaMsg) (tea.Model, tea.Cmd) {
+	p := m.panels[msg.idx]
+	p.buf.WriteString(msg.text)
+	if msg.idx == m.focused {
+		atBottom := m.vp.AtBottom()
+		m.refreshViewport(false)
+		if atBottom {
+			m.vp.GotoBottom()
+		}
+	}
+	return m, nil
+}
+
+func (m *model) handleStatus(msg statusMsg) (tea.Model, tea.Cmd) {
+	p := m.panels[msg.idx]
+	p.status = msg.status
+	p.elapsed = msg.elapsed
+	p.err = msg.err
+	if msg.err != nil {
+		errTxt := lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("\n" + msg.err.Error())
+		p.buf.WriteString(errTxt)
+		if msg.idx == m.focused {
+			m.refreshViewport(false)
+			m.vp.GotoBottom()
+		}
+	}
+	return m, nil
+}
+
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.relayout()
-		m.refreshViewport(true)
-		return m, nil
-
+		return m.handleWindowSize(msg)
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c", "esc":
-			return m, tea.Quit
-		case "tab", "right", "l":
-			m.setFocus(m.focused + 1)
-			return m, nil
-		case "shift+tab", "left", "h":
-			m.setFocus(m.focused - 1)
-			return m, nil
-		}
-		var cmd tea.Cmd
-		m.vp, cmd = m.vp.Update(msg)
-		return m, cmd
-
+		return m.handleKey(msg)
 	case tea.MouseMsg:
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			if idx, ok := m.panelAt(msg.X, msg.Y); ok {
-				m.setFocus(idx)
-			}
-			return m, nil
-		}
-		var cmd tea.Cmd
-		m.vp, cmd = m.vp.Update(msg)
-		return m, cmd
-
+		return m.handleMouse(msg)
 	case deltaMsg:
-		p := m.panels[msg.idx]
-		p.buf.WriteString(msg.text)
-		if msg.idx == m.focused {
-			atBottom := m.vp.AtBottom()
-			m.refreshViewport(false)
-			if atBottom {
-				m.vp.GotoBottom()
-			}
-		}
-		return m, nil
-
+		return m.handleDelta(msg)
 	case statusMsg:
-		p := m.panels[msg.idx]
-		p.status = msg.status
-		p.elapsed = msg.elapsed
-		p.err = msg.err
-		if msg.err != nil {
-			errTxt := lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("\n" + msg.err.Error())
-			p.buf.WriteString(errTxt)
-			if msg.idx == m.focused {
-				m.refreshViewport(false)
-				m.vp.GotoBottom()
-			}
-		}
-		return m, nil
+		return m.handleStatus(msg)
 	}
 
 	return m, nil

@@ -9,6 +9,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -19,7 +20,18 @@ import (
 	"time"
 )
 
-func main() {
+// requestTimeout bounds one chat completion request, as the client timeout did before.
+const requestTimeout = 30 * time.Second
+
+type benchmarkConfig struct {
+	baseurl         string
+	modelName       string
+	totalRequests   int
+	parallelization int
+}
+
+// parseFlags reads the CLI arguments; ok is false after a usage error was printed.
+func parseFlags() (cfg benchmarkConfig, ok bool) {
 	// ----- CLI arguments ----------------------------------------------------
 	var (
 		baseurl         string
@@ -37,87 +49,77 @@ func main() {
 	if baseurl == "" || modelName == "" {
 		fmt.Println("Error: both -baseurl and -model are required.")
 		flag.Usage()
-		os.Exit(1)
+		return benchmarkConfig{}, false
 	}
 	if totalRequests <= 0 {
 		fmt.Println("Error: -requests must be greater than 0.")
-		os.Exit(1)
+		return benchmarkConfig{}, false
 	}
 	if parallelization <= 0 {
 		fmt.Println("Error: -parallelization must be greater than 0.")
-		os.Exit(1)
+		return benchmarkConfig{}, false
 	}
 
-	// ----- HTTP client -------------------------------------------------------
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	return benchmarkConfig{
+		baseurl:         baseurl,
+		modelName:       modelName,
+		totalRequests:   totalRequests,
+		parallelization: parallelization,
+	}, true
+}
 
-	// ----- Tracking response codes -------------------------------------------
-	statusCounts := make(map[int]int) // map[statusCode]count
-	var mu sync.Mutex                 // protects statusCounts
+func runWorker(workerID int, cfg benchmarkConfig, client *http.Client, requests <-chan int, statusCounts map[int]int, mu *sync.Mutex) {
+	for reqID := range requests {
+		// Build request payload as a single line JSON string
+		payload := `{"model":"` + cfg.modelName + `","max_tokens":100,"stream":false,"messages":[{"role":"user","content":"write a snake game in python"}]}`
 
-	// ----- Request queue (buffered channel) ----------------------------------
-	requests := make(chan int, 10) // Buffered channel with capacity 10
-
-	// Goroutine to fill the request queue
-	go func() {
-		for i := 0; i < totalRequests; i++ {
-			requests <- i + 1
+		// Send POST request
+		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+			fmt.Sprintf("%s/chat/completions", cfg.baseurl),
+			bytes.NewReader([]byte(payload)))
+		if err != nil {
+			cancel()
+			log.Printf("[worker %d][req %d] request creation error: %v", workerID, reqID, err)
+			mu.Lock()
+			statusCounts[-1]++
+			mu.Unlock()
+			continue
 		}
-		close(requests)
-	}()
+		req.Header.Set("Content-Type", "application/json")
 
-	// ----- Worker pool -------------------------------------------------------
-	var wg sync.WaitGroup
-	for i := 0; i < parallelization; i++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
+		resp, err := client.Do(req)
+		if err != nil {
+			cancel()
+			log.Printf("[worker %d][req %d] HTTP request error: %v", workerID, reqID, err)
+			mu.Lock()
+			statusCounts[-1]++
+			mu.Unlock()
+			continue
+		}
+		if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+			log.Printf("[worker %d][req %d] read body error: %v", workerID, reqID, err)
+		}
+		resp.Body.Close()
+		cancel()
 
-			for reqID := range requests {
-				// Build request payload as a single line JSON string
-				payload := `{"model":"` + modelName + `","max_tokens":100,"stream":false,"messages":[{"role":"user","content":"write a snake game in python"}]}`
-
-				// Send POST request
-				req, err := http.NewRequest(http.MethodPost,
-					fmt.Sprintf("%s/chat/completions", baseurl),
-					bytes.NewReader([]byte(payload)))
-				if err != nil {
-					log.Printf("[worker %d][req %d] request creation error: %v", workerID, reqID, err)
-					mu.Lock()
-					statusCounts[-1]++
-					mu.Unlock()
-					continue
-				}
-				req.Header.Set("Content-Type", "application/json")
-
-				resp, err := client.Do(req)
-				if err != nil {
-					log.Printf("[worker %d][req %d] HTTP request error: %v", workerID, reqID, err)
-					mu.Lock()
-					statusCounts[-1]++
-					mu.Unlock()
-					continue
-				}
-				io.Copy(io.Discard, resp.Body)
-				resp.Body.Close()
-
-				// Record status code
-				mu.Lock()
-				statusCounts[resp.StatusCode]++
-				mu.Unlock()
-			}
-		}(i + 1)
+		// Record status code
+		mu.Lock()
+		statusCounts[resp.StatusCode]++
+		mu.Unlock()
 	}
+}
 
+func startStatusTicker(totalRequests int, statusCounts map[int]int, mu *sync.Mutex) (chan struct{}, chan struct{}) {
 	// ----- Status ticker (prints every second) -------------------------------
 	done := make(chan struct{})
 	tickerDone := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
 		startTime := time.Now()
-		for {
+		var stopped bool
+		for !stopped {
 			select {
 			case <-ticker.C:
 				mu.Lock()
@@ -135,16 +137,14 @@ func main() {
 				duration := time.Since(startTime)
 				fmt.Printf("Duration: %v, Completed: %d%% requests\n", duration, 100)
 				close(tickerDone)
-				return
+				stopped = true
 			}
 		}
 	}()
+	return done, tickerDone
+}
 
-	// Wait for all workers to finish
-	wg.Wait()
-	close(done)  // stops the status-update goroutine
-	<-tickerDone // give ticker time to finish / print
-
+func printSummary(statusCounts map[int]int, mu *sync.Mutex) {
 	// ----- Summary ------------------------------------------------------------
 	fmt.Println("\n\n=== HTTP response code summary ===")
 	mu.Lock()
@@ -156,4 +156,50 @@ func main() {
 		}
 	}
 	mu.Unlock()
+}
+
+func main() {
+	cfg, ok := parseFlags()
+	if !ok {
+		os.Exit(1)
+	}
+
+	// ----- HTTP client -------------------------------------------------------
+	client := &http.Client{
+		Timeout: requestTimeout,
+	}
+
+	// ----- Tracking response codes -------------------------------------------
+	statusCounts := make(map[int]int) // map[statusCode]count
+	var mu sync.Mutex                 // protects statusCounts
+
+	// ----- Request queue (buffered channel) ----------------------------------
+	requests := make(chan int, 10) // Buffered channel with capacity 10
+
+	// Goroutine to fill the request queue
+	go func() {
+		for i := 0; i < cfg.totalRequests; i++ {
+			requests <- i + 1
+		}
+		close(requests)
+	}()
+
+	// ----- Worker pool -------------------------------------------------------
+	var wg sync.WaitGroup
+	for i := 0; i < cfg.parallelization; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			runWorker(workerID, cfg, client, requests, statusCounts, &mu)
+		}(i + 1)
+	}
+
+	done, tickerDone := startStatusTicker(cfg.totalRequests, statusCounts, &mu)
+
+	// Wait for all workers to finish
+	wg.Wait()
+	close(done)  // stops the status-update goroutine
+	<-tickerDone // give ticker time to finish / print
+
+	printSummary(statusCounts, &mu)
 }
