@@ -1,7 +1,7 @@
 # Builder base for Vulkan builds. See base-cuda.Dockerfile for why the builder
 # base is a published image rather than a stage in a shared Dockerfile.
 
-FROM ubuntu:24.04
+FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CCACHE_DIR=/ccache

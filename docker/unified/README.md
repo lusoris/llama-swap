@@ -316,11 +316,12 @@ version, so compiled binaries and their runtime libraries always come from the
 same CUDA. The default depends on the variant: `12.9.1` for `--cuda` and
 `13.3.1` for `--cuda13`.
 
-Set the `CUDA_VERSION` environment variable to use another one — it takes the
-version portion of the `nvidia/cuda` image tag, so `CUDA_VERSION=12.6.0` builds
-from `nvidia/cuda:12.6.0-devel-ubuntu24.04`. It changes the CUDA base's hash, so
-a new version rebuilds the base, all five CUDA projects, and the runtime image
-for that variant.
+The default base images are digest-pinned for reproducible builds. To build
+against another `CUDA_VERSION`, provide both `CUDA_DEVEL_IMAGE` and
+`CUDA_RUNTIME_IMAGE` environment variables pinned to `@sha256:` digests (e.g.
+`nvidia/cuda:<ver>-devel-ubuntu24.04@sha256:...`). The devel image is part of
+the CUDA base's hash, so a new version or devel digest rebuilds the base, all
+five CUDA projects, and the runtime image for that variant.
 
 ### GPU support
 
