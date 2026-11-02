@@ -78,10 +78,8 @@ func readBuildImageScript(t *testing.T, path string) string {
 	return string(data)
 }
 
-func TestRenovateCUDAManagerMatchesDigestTable(t *testing.T) {
-	cfg := loadRenovateConfig(t, "renovate.json")
-	mgr := findCUDAManager(t, cfg)
-
+func checkCUDAManagerTemplates(t *testing.T, mgr renovateCustomManager) {
+	t.Helper()
 	if mgr.CustomType != "regex" {
 		t.Errorf("customType = %q; want %q", mgr.CustomType, "regex")
 	}
@@ -94,20 +92,26 @@ func TestRenovateCUDAManagerMatchesDigestTable(t *testing.T) {
 	if len(mgr.MatchStrings) != 1 {
 		t.Fatalf("matchStrings length = %d; want 1", len(mgr.MatchStrings))
 	}
+}
 
+func compileCUDAManagerRegex(t *testing.T, mgr renovateCustomManager) *regexp.Regexp {
+	t.Helper()
 	mgrRegex, err := regexp.Compile(mgr.MatchStrings[0])
 	if err != nil {
 		t.Fatalf("failed to compile matchString %q: %v", mgr.MatchStrings[0], err)
 	}
+	return mgrRegex
+}
 
-	buildScript := readBuildImageScript(t, "docker/unified/build-image.sh")
+func collectCUDAMatches(t *testing.T, script string, mgrRegex *regexp.Regexp) ([]string, []string, [][]string) {
+	t.Helper()
 	broadRe := regexp.MustCompile(`nvidia/cuda:[^"}\s]*@sha256:[a-f0-9]{64}`)
 
 	var pinnedLiterals []string
 	var managerMatches []string
 	var managerSubmatches [][]string
 
-	lines := strings.Split(buildScript, "\n")
+	lines := strings.Split(script, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, "<digest>") {
 			continue
@@ -123,26 +127,33 @@ func TestRenovateCUDAManagerMatchesDigestTable(t *testing.T) {
 	if len(pinnedLiterals) < 1 {
 		t.Fatalf("pinned literal count = %d; want at least 1", len(pinnedLiterals))
 	}
+	return pinnedLiterals, managerMatches, managerSubmatches
+}
 
-	if len(managerMatches) != len(pinnedLiterals) {
-		t.Errorf("manager matched %d entries, want %d pinned literals", len(managerMatches), len(pinnedLiterals))
+func comparePinnedLiterals(t *testing.T, pinned, matches []string) {
+	t.Helper()
+	if len(matches) != len(pinned) {
+		t.Errorf("manager matched %d entries, want %d pinned literals", len(matches), len(pinned))
 	}
 
-	for i := 0; i < len(pinnedLiterals); i++ {
-		if i >= len(managerMatches) {
-			t.Errorf("pinned literal %d %q not matched by manager regex", i, pinnedLiterals[i])
+	for i := 0; i < len(pinned); i++ {
+		if i >= len(matches) {
+			t.Errorf("pinned literal %d %q not matched by manager regex", i, pinned[i])
 			continue
 		}
-		if managerMatches[i] != pinnedLiterals[i] {
-			t.Errorf("match %d mismatch: got %q, want %q", i, managerMatches[i], pinnedLiterals[i])
+		if matches[i] != pinned[i] {
+			t.Errorf("match %d mismatch: got %q, want %q", i, matches[i], pinned[i])
 		}
 	}
-	if len(managerMatches) > len(pinnedLiterals) {
-		for i := len(pinnedLiterals); i < len(managerMatches); i++ {
-			t.Errorf("unexpected manager match %d: %q", i, managerMatches[i])
+	if len(matches) > len(pinned) {
+		for i := len(pinned); i < len(matches); i++ {
+			t.Errorf("unexpected manager match %d: %q", i, matches[i])
 		}
 	}
+}
 
+func getCaptureIndices(t *testing.T, mgrRegex *regexp.Regexp) (int, int, int) {
+	t.Helper()
 	depNameIdx := mgrRegex.SubexpIndex("depName")
 	currentValueIdx := mgrRegex.SubexpIndex("currentValue")
 	currentDigestIdx := mgrRegex.SubexpIndex("currentDigest")
@@ -156,8 +167,14 @@ func TestRenovateCUDAManagerMatchesDigestTable(t *testing.T) {
 	if currentDigestIdx == -1 {
 		t.Fatalf("capture group 'currentDigest' not found in manager matchString")
 	}
+	return depNameIdx, currentValueIdx, currentDigestIdx
+}
 
-	for i, sm := range managerSubmatches {
+func checkCUDACaptures(t *testing.T, mgrRegex *regexp.Regexp, submatches [][]string) {
+	t.Helper()
+	depNameIdx, currentValueIdx, currentDigestIdx := getCaptureIndices(t, mgrRegex)
+
+	for i, sm := range submatches {
 		depName := sm[depNameIdx]
 		currentValue := sm[currentValueIdx]
 		currentDigest := sm[currentDigestIdx]
@@ -175,23 +192,37 @@ func TestRenovateCUDAManagerMatchesDigestTable(t *testing.T) {
 	}
 }
 
-func TestRenovateCUDAPolicyDigestOnly(t *testing.T) {
+func TestRenovateCUDAManagerMatchesDigestTable(t *testing.T) {
 	cfg := loadRenovateConfig(t, "renovate.json")
-	rule, ruleIdx := findCUDAPackageRule(t, cfg)
+	mgr := findCUDAManager(t, cfg)
+	checkCUDAManagerTemplates(t, mgr)
 
-	if rule.Enabled == nil {
+	mgrRegex := compileCUDAManagerRegex(t, mgr)
+	buildScript := readBuildImageScript(t, "docker/unified/build-image.sh")
+	pinnedLiterals, managerMatches, managerSubmatches := collectCUDAMatches(t, buildScript, mgrRegex)
+
+	comparePinnedLiterals(t, pinnedLiterals, managerMatches)
+	checkCUDACaptures(t, mgrRegex, managerSubmatches)
+}
+
+func checkRuleDisabled(t *testing.T, ruleIdx int, enabled *bool) {
+	t.Helper()
+	if enabled == nil {
 		t.Errorf("packageRule[%d] enabled field is nil; want enabled == false", ruleIdx)
-	} else if *rule.Enabled {
-		t.Errorf("packageRule[%d] enabled = %t; want false", ruleIdx, *rule.Enabled)
+	} else if *enabled {
+		t.Errorf("packageRule[%d] enabled = %t; want false", ruleIdx, *enabled)
 	}
+}
 
+func checkUpdateTypesExact(t *testing.T, ruleIdx int, matchUpdateTypes []string) {
+	t.Helper()
 	expectedSet := map[string]bool{
 		"major": true,
 		"minor": true,
 		"patch": true,
 	}
 	seenTypes := make(map[string]int)
-	for _, ut := range rule.MatchUpdateTypes {
+	for _, ut := range matchUpdateTypes {
 		seenTypes[ut]++
 		if !expectedSet[ut] {
 			t.Errorf("packageRule[%d] unexpected matchUpdateType %q (only major, minor, patch allowed)", ruleIdx, ut)
@@ -202,14 +233,17 @@ func TestRenovateCUDAPolicyDigestOnly(t *testing.T) {
 			t.Errorf("packageRule[%d] missing required matchUpdateType %q", ruleIdx, exp)
 		}
 	}
-	if len(rule.MatchUpdateTypes) != len(expectedSet) {
+	if len(matchUpdateTypes) != len(expectedSet) {
 		t.Errorf("packageRule[%d] matchUpdateTypes length = %d; want %d (%v)",
-			ruleIdx, len(rule.MatchUpdateTypes), len(expectedSet), rule.MatchUpdateTypes)
+			ruleIdx, len(matchUpdateTypes), len(expectedSet), matchUpdateTypes)
 	}
 	if seenTypes["digest"] > 0 || seenTypes["pinDigest"] > 0 {
 		t.Errorf("packageRule[%d] matchUpdateTypes must not contain 'digest' or 'pinDigest'", ruleIdx)
 	}
+}
 
+func checkNoOtherRuleDisablesDigest(t *testing.T, cfg renovateConfig, ruleIdx int) {
+	t.Helper()
 	for i, otherRule := range cfg.PackageRules {
 		if i == ruleIdx {
 			continue
@@ -223,4 +257,13 @@ func TestRenovateCUDAPolicyDigestOnly(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestRenovateCUDAPolicyDigestOnly(t *testing.T) {
+	cfg := loadRenovateConfig(t, "renovate.json")
+	rule, ruleIdx := findCUDAPackageRule(t, cfg)
+
+	checkRuleDisabled(t, ruleIdx, rule.Enabled)
+	checkUpdateTypesExact(t, ruleIdx, rule.MatchUpdateTypes)
+	checkNoOtherRuleDisablesDigest(t, cfg, ruleIdx)
 }
