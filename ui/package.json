@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "@tanstack/table-core": "^8.21.3",
-    "chart.js": "4.5.1",
+    "chart.js": "4.6.1",
     "highlight.js": "^11.11.1",
     "katex": "^0.18.10",
     "rehype-katex": "^7.0.1",
