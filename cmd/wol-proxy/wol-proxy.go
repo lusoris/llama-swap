@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"log/slog"
 	"net"
@@ -21,10 +22,20 @@ import (
 )
 
 //go:embed index.html
-var loadingPageHTML string
+var loadingPageSrc string
 
 //go:embed confirm.html
-var confirmPageHTML string
+var confirmPageSrc string
+
+// Every response body goes through html/template so dynamic values are escaped.
+var (
+	loadingPageTpl = template.Must(template.New("loading").Parse(loadingPageSrc))
+	confirmPageTpl = template.Must(template.New("confirm").Parse(confirmPageSrc))
+	statusTpl      = template.Must(template.New("status").Parse("status: {{.Status}}\nfailures: {{.Failures}}\n"))
+)
+
+// loadingData fills the loading page template.
+type loadingData struct{ Expected string }
 
 // wakePath is the endpoint the confirmation page posts to when -require-confirm is set
 const wakePath = "/wol-wake"
@@ -387,8 +398,11 @@ func (p *proxyServer) handleStatus(w http.ResponseWriter) {
 	failCount := p.getFailures()
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	body := fmt.Sprintf("status: %s\nfailures: %d\n", status, failCount)
-	if _, err := io.WriteString(w, body); err != nil {
+	data := struct {
+		Status   string
+		Failures int
+	}{status, failCount}
+	if err := statusTpl.Execute(w, data); err != nil {
 		slog.Debug("failed to write status response", "error", err)
 	}
 }
@@ -417,11 +431,11 @@ func isRootOrUI(path string) bool {
 	return path == "/" || strings.HasPrefix(path, "/ui/")
 }
 
-// writeHTML sends an HTML response and logs any write error.
-func writeHTML(w http.ResponseWriter, status int, html string) {
+// writeHTML renders an HTML template and logs any write error.
+func writeHTML(w http.ResponseWriter, status int, tpl *template.Template, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	if _, err := io.WriteString(w, html); err != nil {
+	if err := tpl.Execute(w, data); err != nil {
 		slog.Debug("failed to write html response", "error", err)
 	}
 }
@@ -436,7 +450,7 @@ func (p *proxyServer) handleNotReady(w http.ResponseWriter, r *http.Request) boo
 
 	if *flagRequireConfirm {
 		if isRootOrUI(path) {
-			writeHTML(w, http.StatusOK, confirmPageHTML)
+			writeHTML(w, http.StatusOK, confirmPageTpl, nil)
 			return false
 		}
 		slog.Info("upstream not ready, confirmation required", "req", path, "from", r.RemoteAddr)
@@ -451,7 +465,7 @@ func (p *proxyServer) handleNotReady(w http.ResponseWriter, r *http.Request) boo
 	}
 
 	if isRootOrUI(path) {
-		writeHTML(w, http.StatusOK, loadingPageHTML)
+		writeHTML(w, http.StatusOK, loadingPageTpl, loadingData{Expected: "0"})
 		return false
 	}
 
@@ -516,18 +530,17 @@ func (p *proxyServer) handleWakeProgress(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeHTML(w, http.StatusOK, p.loadingPage())
+	writeHTML(w, http.StatusOK, loadingPageTpl, loadingData{Expected: p.loadingExpected()})
 }
 
-// loadingPage returns the loading page with the duration of the last wake, so
-// the progress bar can estimate how long this one will take
-func (p *proxyServer) loadingPage() string {
+// loadingExpected returns the last wake duration in seconds for the loading
+// page, so the progress bar can estimate how long this one will take
+func (p *proxyServer) loadingExpected() string {
 	last := p.lastWakeDuration()
 	if last <= 0 {
-		return loadingPageHTML // no estimate yet
+		return "0" // no estimate yet
 	}
-	expected := fmt.Sprintf(`data-expected="%.1f"`, last.Seconds())
-	return strings.Replace(loadingPageHTML, `data-expected="0"`, expected, 1)
+	return fmt.Sprintf("%.1f", last.Seconds())
 }
 
 // beginWake marks the start of a wake, the first request of a wake wins

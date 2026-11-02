@@ -114,7 +114,7 @@ func TestProxy_WakePathIgnoredWithoutRequireConfirm(t *testing.T) {
 func TestProxy_LastWakeDurationIsRememberedAndShownInLoadingPage(t *testing.T) {
 	p := newTestProxy(t, true)
 
-	if got := p.loadingPage(); !strings.Contains(got, `data-expected="0"`) {
+	if got := p.loadingExpected(); got != "0" {
 		t.Fatalf("expected no estimate before the first wake")
 	}
 
@@ -127,7 +127,7 @@ func TestProxy_LastWakeDurationIsRememberedAndShownInLoadingPage(t *testing.T) {
 	if d := p.lastWakeDuration(); d < 12*time.Second || d > 14*time.Second {
 		t.Fatalf("unexpected last wake duration %v", d)
 	}
-	if got := p.loadingPage(); !strings.Contains(got, `data-expected="12.5"`) {
+	if got := p.loadingExpected(); got != "12.5" {
 		t.Fatalf("expected the last wake duration in the loading page")
 	}
 
