@@ -5,7 +5,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/mostlygeek/llama-swap/internal/config"
@@ -75,18 +78,26 @@ func main() {
 	}
 
 	if *stream {
-		m, _ := perf.New(config.PerformanceConfig{Every: every}, l)
-		m.Start()
-		defer m.Stop()
-		sysCh, gpuCh, unsub := m.Subscribe()
-		defer unsub()
-		for {
-			select {
-			case s := <-sysCh:
-				printSysStat(s)
-			case g := <-gpuCh:
-				printGpuStats(g)
-			}
+		sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		streamStats(sigCtx, every, l)
+	}
+}
+
+func streamStats(ctx context.Context, every time.Duration, l *logmon.Monitor) {
+	m, _ := perf.New(config.PerformanceConfig{Every: every}, l)
+	m.Start()
+	defer m.Stop()
+	sysCh, gpuCh, unsub := m.Subscribe()
+	defer unsub()
+	for ctx.Err() == nil {
+		select {
+		case <-ctx.Done():
+			return
+		case s := <-sysCh:
+			printSysStat(s)
+		case g := <-gpuCh:
+			printGpuStats(g)
 		}
 	}
 }
