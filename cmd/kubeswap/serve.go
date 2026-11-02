@@ -211,39 +211,56 @@ func pvcAllowsReadWrite(pvc *corev1.PersistentVolumeClaim) bool {
 	return false
 }
 
-func createMissingPVCs(ctx context.Context, client kubernetes.Interface, cfg *serveConfig) ([]string, error) {
+// warnHostPathVolumes logs a warning for each hostpath volume configured.
+func warnHostPathVolumes(cfg *serveConfig) {
 	for _, v := range cfg.Volumes {
 		if v.Kind == volHostPath {
 			log.Printf("WARNING: mounting host path %q at %q in the backend pod: hostpath volumes escape the namespace boundary, so the pod can read (and, without :ro, write) that part of the node", v.Name, v.Path)
 		}
 	}
+}
+
+// ensurePVC ensures the volume claim exists, creating it when missing.
+func ensurePVC(ctx context.Context, client kubernetes.Interface, cfg *serveConfig, v volumeSpec) (created bool, err error) {
+	pvc, err := client.CoreV1().PersistentVolumeClaims(cfg.Namespace).Get(ctx, v.Name, metav1.GetOptions{})
+	switch {
+	case err == nil:
+		// Adopt the existing PVC as-is (it may be user-managed, e.g. a
+		// shared model cache); do not relabel it. But a read-only PVC
+		// cannot serve a read-write mount: the pod would sit in
+		// ContainerCreating with a cryptic volume error, so check now.
+		if !v.ReadOnly && !pvcAllowsReadWrite(pvc) {
+			return false, fmt.Errorf("PVC %s/%s is read-only (access modes %v) but the model mounts it read-write at %s; add :ro to the --volume or use a read-write PVC", cfg.Namespace, v.Name, pvc.Spec.AccessModes, v.Path)
+		}
+		return false, nil
+	case apierrors.IsNotFound(err):
+		pvc, err := cfg.renderPVC(v.Name)
+		if err != nil {
+			return false, err
+		}
+		if _, err := client.CoreV1().PersistentVolumeClaims(cfg.Namespace).Create(ctx, pvc, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+			return false, fmt.Errorf("creating PVC %s: %w", v.Name, err)
+		}
+		return true, nil
+	default:
+		return false, fmt.Errorf("getting PVC %s: %w", v.Name, err)
+	}
+}
+
+func createMissingPVCs(ctx context.Context, client kubernetes.Interface, cfg *serveConfig) ([]string, error) {
+	warnHostPathVolumes(cfg)
 	var created []string
 
 	for _, v := range cfg.Volumes {
 		if v.Kind != volPVC {
 			continue
 		}
-		pvc, err := client.CoreV1().PersistentVolumeClaims(cfg.Namespace).Get(ctx, v.Name, metav1.GetOptions{})
-		switch {
-		case err == nil:
-			// Adopt the existing PVC as-is (it may be user-managed, e.g. a
-			// shared model cache); do not relabel it. But a read-only PVC
-			// cannot serve a read-write mount: the pod would sit in
-			// ContainerCreating with a cryptic volume error, so check now.
-			if !v.ReadOnly && !pvcAllowsReadWrite(pvc) {
-				return nil, fmt.Errorf("PVC %s/%s is read-only (access modes %v) but the model mounts it read-write at %s; add :ro to the --volume or use a read-write PVC", cfg.Namespace, v.Name, pvc.Spec.AccessModes, v.Path)
-			}
-		case apierrors.IsNotFound(err):
-			pvc, err := cfg.renderPVC(v.Name)
-			if err != nil {
-				return nil, err
-			}
-			if _, err := client.CoreV1().PersistentVolumeClaims(cfg.Namespace).Create(ctx, pvc, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
-				return nil, fmt.Errorf("creating PVC %s: %w", v.Name, err)
-			}
+		pvcCreated, err := ensurePVC(ctx, client, cfg, v)
+		if err != nil {
+			return nil, err
+		}
+		if pvcCreated {
 			created = append(created, "pvc/"+v.Name)
-		default:
-			return nil, fmt.Errorf("getting PVC %s: %w", v.Name, err)
 		}
 	}
 	return created, nil
