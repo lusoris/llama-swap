@@ -49,6 +49,9 @@ func main() {
 		every = time.Hour
 	}
 
+	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	l := logmon.New()
 	l.SetLogLevel(logmon.LevelDebug)
 
@@ -58,9 +61,6 @@ func main() {
 		return
 	}
 	printSysStat(s)
-
-	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	ctx, cancel := context.WithTimeout(sigCtx, 5*time.Second)
 	defer cancel()
