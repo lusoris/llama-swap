@@ -223,16 +223,10 @@ func TestProcessCommand_StopHonorsGracefulTimeout(t *testing.T) {
 	runErr := runAsync(t, p)
 
 	// Wait until the trap is installed before stopping.
-	trapDeadline := time.Now().Add(2 * time.Second)
-	trapReady := false
-	for !trapReady && time.Now().Before(trapDeadline) {
-		if _, err := os.Stat(ready); err == nil {
-			trapReady = true
-			continue
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !trapReady {
+	if !waitFor(2*time.Second, func() bool {
+		_, err := os.Stat(ready)
+		return err == nil
+	}) {
 		t.Fatalf("script did not install SIGTERM trap in time")
 	}
 
@@ -294,18 +288,10 @@ func TestProcessCommand_StopReapsForkedGrandchild(t *testing.T) {
 
 	// Read the grandchild PID the wrapper recorded.
 	var childPID int
-	deadline := time.Now().Add(2 * time.Second)
-	for childPID == 0 && time.Now().Before(deadline) {
-		data, err := os.ReadFile(pidFile)
-		if err == nil {
-			if pid, perr := strconv.Atoi(strings.TrimSpace(string(data))); perr == nil && pid > 0 {
-				childPID = pid
-				continue
-			}
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if childPID == 0 {
+	if !waitFor(2*time.Second, func() bool {
+		childPID = readPIDFile(pidFile)
+		return childPID > 0
+	}) {
 		t.Fatalf("wrapper did not record grandchild PID")
 	}
 
@@ -416,4 +402,27 @@ func TestProcessCommand_CmdStopDescendantReapedOnTimeout(t *testing.T) {
 	if !gone {
 		t.Fatalf("descendant PID %d still alive after stop returned — process group was not killed", descendantPID)
 	}
+}
+
+// waitFor polls cond every 10ms until it returns true or timeout elapses.
+func waitFor(timeout time.Duration, cond func() bool) bool {
+	for deadline := time.Now().Add(timeout); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		if cond() {
+			return true
+		}
+	}
+	return cond()
+}
+
+// readPIDFile returns the positive PID stored in path, or 0 when it is missing or malformed.
+func readPIDFile(path string) int {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || pid <= 0 {
+		return 0
+	}
+	return pid
 }
