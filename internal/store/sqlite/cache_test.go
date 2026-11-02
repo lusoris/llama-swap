@@ -399,7 +399,7 @@ func TestStore_CacheTTLOverflow(t *testing.T) {
 	}))
 
 	var ttlSeconds int64
-	require.NoError(t, st.db.QueryRow(`SELECT ttl_seconds FROM cache WHERE key = 'overflow'`).Scan(&ttlSeconds))
+	require.NoError(t, st.db.QueryRowContext(ctx, `SELECT ttl_seconds FROM cache WHERE key = 'overflow'`).Scan(&ttlSeconds))
 	assert.Positive(t, ttlSeconds, "never negative ttl")
 
 	now = func() time.Time { return time.Unix(base+1_000_000, 0) }
