@@ -5,6 +5,20 @@
     ":enableVulnerabilityAlertsWithLabel(security)"
   ],
   "forkProcessing": "enabled",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track and refresh CUDA base image digests in docker/unified/build-image.sh",
+      "managerFilePatterns": [
+        "/^docker/unified/build-image\\.sh$/"
+      ],
+      "matchStrings": [
+        "(?<depName>nvidia/cuda):(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+-(?:devel|runtime)-ubuntu[0-9.]+)@(?<currentDigest>sha256:[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
+    }
+  ],
   "packageRules": [
     {
       "description": "praetor-managed files: praetorctl adopt ships their updates and praetorctl audit locks them byte for byte",
@@ -22,6 +36,21 @@
         "github.com/cordanaLLM/praetor/cmd/standardsctl",
         "cordanaLLM/praetor",
         "cordanaLLM/praetor/**"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Case labels in build-image.sh key on exact CUDA versions; only digest refreshes are allowed and version changes require manual table edits",
+      "matchFileNames": [
+        "docker/unified/build-image.sh"
+      ],
+      "matchDepNames": [
+        "nvidia/cuda"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch"
       ],
       "enabled": false
     }
