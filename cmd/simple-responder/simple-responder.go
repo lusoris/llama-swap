@@ -122,7 +122,11 @@ func audioSpeechHandler(expectedModel *string) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read request body"})
 			return
 		}
-		defer c.Request.Body.Close()
+		defer func() {
+			if err := c.Request.Body.Close(); err != nil {
+				log.Printf("close request body error: %v", err)
+			}
+		}()
 		modelName := gjson.GetBytes(body, "model").String()
 		if modelName != *expectedModel {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid model: %s, expected: %s", modelName, *expectedModel)})
@@ -282,26 +286,7 @@ func rootHandler(c *gin.Context) {
 	c.String(200, fmt.Sprintf("%s %s", c.Request.Method, c.Request.URL.Path))
 }
 
-func sdapiTxt2ImgHandler(c *gin.Context) {
-	body, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read request body"})
-		return
-	}
-	defer func() {
-		if err := c.Request.Body.Close(); err != nil {
-			log.Printf("close request body error: %v", err)
-		}
-	}()
-
-	modelName := gjson.GetBytes(body, "model").String()
-	c.JSON(http.StatusOK, gin.H{
-		"model":  modelName,
-		"images": []string{},
-	})
-}
-
-func sdapiImg2ImgHandler(c *gin.Context) {
+func sdapiImageHandler(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read request body"})
@@ -360,9 +345,9 @@ func setupRouter(expectedModel, responseMessage *string) *gin.Engine {
 	r.GET("/", rootHandler)
 
 	// SD API endpoints
-	r.POST("/sdapi/v1/txt2img", sdapiTxt2ImgHandler)
+	r.POST("/sdapi/v1/txt2img", sdapiImageHandler)
 
-	r.POST("/sdapi/v1/img2img", sdapiImg2ImgHandler)
+	r.POST("/sdapi/v1/img2img", sdapiImageHandler)
 
 	r.GET("/sdapi/v1/loras", sdapiLorasHandler)
 
