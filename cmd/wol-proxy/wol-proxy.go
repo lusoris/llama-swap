@@ -154,6 +154,7 @@ type proxyServer struct {
 	status        upstreamStatus
 	sseBodyMu     sync.Mutex
 	sseBody       io.Closer
+	sseGen        uint64
 
 	// guarded by statusMutex
 	wakeStart time.Time     // when the pending wake began, zero if none
@@ -172,10 +173,15 @@ func isDebugEnabled(ctx context.Context) bool {
 	return slog.Default().Enabled(ctx, slog.LevelDebug)
 }
 
-func discardAndClose(body io.ReadCloser, desc string) {
+// discardBody reads all data from body to discard it.
+func discardBody(body io.Reader, desc string) {
 	if _, err := io.Copy(io.Discard, body); err != nil {
 		slog.Debug("failed to discard "+desc, "error", err)
 	}
+}
+
+func discardAndClose(body io.ReadCloser, desc string) {
+	discardBody(body, desc)
 	if err := body.Close(); err != nil {
 		slog.Debug("failed to close "+desc, "error", err)
 	}
@@ -224,22 +230,34 @@ func readSSEEvents(ctx context.Context, body io.Reader) {
 	}
 }
 
+// waitReconnect pauses for d or until ctx is cancelled, returning false on cancellation.
+func waitReconnect(ctx context.Context, d time.Duration) bool {
+	if d <= 0 {
+		return true
+	}
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(d):
+		return true
+	}
+}
+
 func runSSEMonitor(ctx context.Context, proxy *proxyServer, eventsURL string, apiKey string) {
 	client := &http.Client{Timeout: 0}
 	reconnectDelay := time.Duration(0)
 
 	for ctx.Err() == nil {
-		if reconnectDelay > 0 {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(reconnectDelay):
-			}
+		if !waitReconnect(ctx, reconnectDelay) {
+			return
 		}
 
 		slog.Debug("connecting to SSE endpoint", "url", eventsURL)
 		resp, err := connectSSE(ctx, client, eventsURL, apiKey)
 		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
 			slog.Warn("failed to connect to SSE endpoint", "error", err)
 			proxy.setStatus(notready)
 			proxy.incFail(1)
@@ -277,6 +295,50 @@ func runSSEMonitor(ctx context.Context, proxy *proxyServer, eventsURL string, ap
 	}
 }
 
+// closeCurrentSSE closes the active SSE stream if gen is still current.
+func (p *proxyServer) closeCurrentSSE(gen uint64) {
+	if c := p.takeSSEBody(gen); c != nil {
+		if err := c.Close(); err != nil {
+			slog.Debug("failed to close SSE connection on health check failure", "error", err)
+		}
+	}
+}
+
+// probeHealth checks upstream health and updates proxy status if the generation is still current.
+func probeHealth(ctx context.Context, client *http.Client, proxy *proxyServer, healthURL string) {
+	gen := proxy.currentSSEGen()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+		slog.Warn("failed to create health check request", "error", err)
+		return
+	}
+	resp, err := client.Do(req)
+	if resp != nil {
+		defer func() {
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				slog.Debug("failed to close health check body", "error", closeErr)
+			}
+		}()
+		discardBody(resp.Body, "health check body")
+	}
+	if ctx.Err() != nil {
+		return
+	}
+	if err == nil {
+		return
+	}
+	if proxy.currentSSEGen() != gen {
+		return
+	}
+	slog.Warn("upstream health check failed, marking upstream not ready", "error", err)
+	proxy.setStatus(notready)
+	proxy.incFail(1)
+	proxy.closeCurrentSSE(gen)
+}
+
 // start a goroutine that periodically checks upstream liveness so a
 // silently dead connection (e.g. upstream suspended without a TCP close)
 // is detected and the upstream is marked not ready again
@@ -290,19 +352,7 @@ func runHealthChecker(ctx context.Context, proxy *proxyServer, healthURL string)
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			resp, err := client.Get(healthURL)
-			if err == nil {
-				discardAndClose(resp.Body, "health check body")
-				continue
-			}
-			slog.Warn("upstream health check failed, marking upstream not ready", "error", err)
-			proxy.setStatus(notready)
-			proxy.incFail(1)
-			if c := proxy.takeSSEBody(); c != nil {
-				if err := c.Close(); err != nil {
-					slog.Debug("failed to close SSE connection on health check failure", "error", err)
-				}
-			}
+			probeHealth(ctx, client, proxy, healthURL)
 		}
 	}
 }
@@ -337,8 +387,12 @@ func (p *proxyServer) handleStatus(w http.ResponseWriter) {
 	failCount := p.getFailures()
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "status: %s\n", status)
-	fmt.Fprintf(w, "failures: %d\n", failCount)
+	if _, err := fmt.Fprintf(w, "status: %s\n", status); err != nil {
+		slog.Debug("failed to write status response", "error", err)
+	}
+	if _, err := fmt.Fprintf(w, "failures: %d\n", failCount); err != nil {
+		slog.Debug("failed to write status failures response", "error", err)
+	}
 }
 
 func (p *proxyServer) waitForReady(ctx context.Context, timeout time.Duration) bool {
@@ -360,6 +414,20 @@ func (p *proxyServer) waitForReady(ctx context.Context, timeout time.Duration) b
 	return false
 }
 
+// isRootOrUI reports whether path is the root page or a UI subpath.
+func isRootOrUI(path string) bool {
+	return path == "/" || strings.HasPrefix(path, "/ui/")
+}
+
+// writeHTML sends an HTML response and logs any write error.
+func writeHTML(w http.ResponseWriter, status int, html string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	if _, err := fmt.Fprint(w, html); err != nil {
+		slog.Debug("failed to write html response", "error", err)
+	}
+}
+
 func (p *proxyServer) handleNotReady(w http.ResponseWriter, r *http.Request) bool {
 	path := r.URL.Path
 	if strings.HasPrefix(path, "/api/events") {
@@ -369,10 +437,8 @@ func (p *proxyServer) handleNotReady(w http.ResponseWriter, r *http.Request) boo
 	}
 
 	if *flagRequireConfirm {
-		if path == "/" || strings.HasPrefix(path, "/ui/") {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, confirmPageHTML)
+		if isRootOrUI(path) {
+			writeHTML(w, http.StatusOK, confirmPageHTML)
 			return false
 		}
 		slog.Info("upstream not ready, confirmation required", "req", path, "from", r.RemoteAddr)
@@ -386,10 +452,8 @@ func (p *proxyServer) handleNotReady(w http.ResponseWriter, r *http.Request) boo
 		slog.Warn("failed to send magic WoL packet", "error", err)
 	}
 
-	if path == "/" || strings.HasPrefix(path, "/ui/") {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, loadingPageHTML)
+	if isRootOrUI(path) {
+		writeHTML(w, http.StatusOK, loadingPageHTML)
 		return false
 	}
 
@@ -535,12 +599,26 @@ func (p *proxyServer) resetFailures() {
 func (p *proxyServer) setSSEBody(c io.Closer) {
 	p.sseBodyMu.Lock()
 	defer p.sseBodyMu.Unlock()
+	if c != nil {
+		p.sseGen++
+	}
 	p.sseBody = c
 }
 
-func (p *proxyServer) takeSSEBody() io.Closer {
+// currentSSEGen returns the active SSE stream generation number.
+func (p *proxyServer) currentSSEGen() uint64 {
 	p.sseBodyMu.Lock()
 	defer p.sseBodyMu.Unlock()
+	return p.sseGen
+}
+
+// takeSSEBody returns and clears the SSE body closer if gen is still current.
+func (p *proxyServer) takeSSEBody(gen uint64) io.Closer {
+	p.sseBodyMu.Lock()
+	defer p.sseBodyMu.Unlock()
+	if p.sseGen != gen {
+		return nil
+	}
 	c := p.sseBody
 	p.sseBody = nil
 	return c
