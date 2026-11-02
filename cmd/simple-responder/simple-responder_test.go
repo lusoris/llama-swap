@@ -91,14 +91,17 @@ func TestSetupRouter_ChatCompletions_Streaming(t *testing.T) {
 		t.Errorf("expected streaming body to end with [DONE], got: %q", body)
 	}
 
-	foundExpectedChunk := false
+	if !streamHasDeltaContent(body, "asdf") {
+		t.Errorf("expected at least one streamed chunk with content %q, got: %q", "asdf", body)
+	}
+}
+
+// streamHasDeltaContent reports whether an SSE body carries a chunk whose delta content equals want.
+func streamHasDeltaContent(body, want string) bool {
 	for _, line := range strings.Split(body, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "data:") {
-			continue
-		}
-		dataStr := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if dataStr == "[DONE]" {
+		dataStr, ok := strings.CutPrefix(strings.TrimSpace(line), "data:")
+		dataStr = strings.TrimSpace(dataStr)
+		if !ok || dataStr == "[DONE]" {
 			continue
 		}
 		var parsed struct {
@@ -108,18 +111,16 @@ func TestSetupRouter_ChatCompletions_Streaming(t *testing.T) {
 				} `json:"delta"`
 			} `json:"choices"`
 		}
-		if err := json.Unmarshal([]byte(dataStr), &parsed); err == nil {
-			for _, choice := range parsed.Choices {
-				if choice.Delta.Content == "asdf" {
-					foundExpectedChunk = true
-					break
-				}
+		if json.Unmarshal([]byte(dataStr), &parsed) != nil {
+			continue
+		}
+		for _, choice := range parsed.Choices {
+			if choice.Delta.Content == want {
+				return true
 			}
 		}
 	}
-	if !foundExpectedChunk {
-		t.Errorf("expected at least one streamed chunk with content %q, got: %q", "asdf", body)
-	}
+	return false
 }
 
 func TestWaitForShutdown_SigTerm(t *testing.T) {

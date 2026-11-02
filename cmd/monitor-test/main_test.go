@@ -21,8 +21,7 @@ func TestStreamStats_ReturnsPromptlyOnCancel(t *testing.T) {
 	os.Stdout = w
 	t.Cleanup(func() {
 		os.Stdout = origStdout
-		_ = w.Close()
-		_ = r.Close()
+		closePipe(t, w, r)
 	})
 
 	firstLineCh := make(chan string, 1)
@@ -79,5 +78,15 @@ func TestStreamStats_AlreadyCancelledContext(t *testing.T) {
 		// returned promptly
 	case <-time.After(2 * time.Second):
 		t.Fatal("streamStats did not return within 2s with already cancelled context")
+	}
+}
+
+// closePipe closes both pipe ends and reports a close error as a test error.
+func closePipe(t *testing.T, ends ...io.Closer) {
+	t.Helper()
+	for _, end := range ends {
+		if err := end.Close(); err != nil {
+			t.Errorf("close pipe: %v", err)
+		}
 	}
 }
