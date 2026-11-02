@@ -844,7 +844,7 @@ func (p *ProcessCommand) runStopCommand(stopArgs, env []string, pid int) error {
 	}
 	stopCtx, cancel := context.WithTimeout(p.detachedCtx, timeout)
 	defer cancel()
-	stopCmd := exec.CommandContext(stopCtx, stopArgs[0], stopArgs[1:]...)
+	stopCmd := exec.CommandContext(stopCtx, stopArgs[0], stopArgs[1:]...) // #nosec G204 -- cmdStop is operator YAML argv, PID int only, SanitizeCommand, no shell // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	stopCmd.Cancel = func() error { return killProcessTree(stopCmd) }
 	stopCmd.Stderr = p.processLogger
 	stopCmd.Stdout = p.processLogger
