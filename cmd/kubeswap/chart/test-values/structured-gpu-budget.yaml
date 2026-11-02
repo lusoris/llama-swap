@@ -11,7 +11,7 @@ config:
     exclusive:
       - big-image
   defaults:
-    image: ghcr.io/mostlygeek/llama-swap:unified-vulkan
+    image: ghcr.io/mostlygeek/llama-swap:unified-vulkan@sha256:ff2794e18b4f9461739ae8ea99002d0eea589e21ae38ff78fb0b9af92b5b62a7
     command: llama-server
     gpu: [amd.com/gpu=1]
     volumes:
