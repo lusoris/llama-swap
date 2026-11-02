@@ -142,6 +142,8 @@ for arg in "$@"; do
             echo "                       90;100;120;121 for --cuda13 on arm64)"
             echo "  CUDA_VERSION         CUDA toolkit/runtime version as an nvidia/cuda image tag"
             echo "                       (default: 12.9.1 for --cuda, 13.3.1 for --cuda13)"
+            echo "  CUDA_DEVEL_IMAGE     nvidia/cuda devel base image pinned by digest (@sha256:...)"
+            echo "  CUDA_RUNTIME_IMAGE   nvidia/cuda runtime base image pinned by digest (@sha256:...)"
             echo "  DATE_TAG             Date suffix for published tags (default: today, UTC)"
             echo "  ARTIFACT_REPO        Registry for base and artifacts images"
             echo "                       (default: ghcr.io/mostlygeek/llama-swap-build)"
@@ -241,6 +243,40 @@ DATE_TAG="${DATE_TAG:-$(date -u +%Y-%m-%d)}"
 if [[ "$BACKEND" == "cuda" && ! "$CUDA_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
     echo "ERROR: CUDA_VERSION '${CUDA_VERSION}' is not a valid nvidia/cuda version (e.g., 12.9.1)" >&2
     exit 1
+fi
+
+# Resolve CUDA base images with digest pins.
+CUDA_DEVEL_IMAGE="${CUDA_DEVEL_IMAGE:-}"
+CUDA_RUNTIME_IMAGE="${CUDA_RUNTIME_IMAGE:-}"
+if [[ "$BACKEND" == "cuda" ]]; then
+    if [[ -z "${CUDA_DEVEL_IMAGE}" || -z "${CUDA_RUNTIME_IMAGE}" ]]; then
+        case "${CUDA_VERSION}" in
+            12.9.1)
+                CUDA_DEVEL_IMAGE="${CUDA_DEVEL_IMAGE:-nvidia/cuda:12.9.1-devel-ubuntu24.04@sha256:020bc241a628776338f4d4053fed4c38f6f7f3d7eb5919fecb8de313bb8ba47c}"
+                CUDA_RUNTIME_IMAGE="${CUDA_RUNTIME_IMAGE:-nvidia/cuda:12.9.1-runtime-ubuntu24.04@sha256:1287141d283b8f06f45681b56a48a85791398c615888b1f96bfb9fc981392d98}"
+                ;;
+            13.3.1)
+                CUDA_DEVEL_IMAGE="${CUDA_DEVEL_IMAGE:-nvidia/cuda:13.3.1-devel-ubuntu24.04@sha256:4ff859525f99de5782aa73607ce24219b07dddd48d12b97c1c301d7e1cfb0a87}"
+                CUDA_RUNTIME_IMAGE="${CUDA_RUNTIME_IMAGE:-nvidia/cuda:13.3.1-runtime-ubuntu24.04@sha256:63da350831208559df18c7b8f3e0d5d1c984eaa815cdde690aacd6606cd0cb11}"
+                ;;
+            *)
+                echo "ERROR: CUDA_VERSION '${CUDA_VERSION}' has no pinned base image digests in build-image.sh" >&2
+                echo "  Set both CUDA_DEVEL_IMAGE and CUDA_RUNTIME_IMAGE in the environment with digests:" >&2
+                echo "    CUDA_DEVEL_IMAGE=nvidia/cuda:${CUDA_VERSION}-devel-ubuntu24.04@sha256:<digest>" >&2
+                echo "    CUDA_RUNTIME_IMAGE=nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu24.04@sha256:<digest>" >&2
+                exit 1
+                ;;
+        esac
+    fi
+
+    if [[ "${CUDA_DEVEL_IMAGE}" != *"@sha256:"* ]]; then
+        echo "ERROR: CUDA_DEVEL_IMAGE '${CUDA_DEVEL_IMAGE}' must include a digest pin (@sha256:...)" >&2
+        exit 1
+    fi
+    if [[ "${CUDA_RUNTIME_IMAGE}" != *"@sha256:"* ]]; then
+        echo "ERROR: CUDA_RUNTIME_IMAGE '${CUDA_RUNTIME_IMAGE}' must include a digest pin (@sha256:...)" >&2
+        exit 1
+    fi
 fi
 
 # --resolve emits machine-readable output only, so the progress chatter that
@@ -345,15 +381,16 @@ project_image_arg() {
 base_tag() {
     local h
     # The CUDA base bakes CMAKE_CUDA_ARCHITECTURES into its ENV and the
-    # CUDA_VERSION into its FROM line, so an override of either must change
-    # the tag even though the Dockerfile is unchanged. That is also what keeps
-    # the cuda and cuda13 variants apart: they share base-cuda.Dockerfile and
-    # differ only in these two values.
+    # pinned devel image (CUDA_DEVEL_IMAGE, keyed on CUDA_VERSION) into its
+    # FROM line, so an override of any of them must change the tag even though
+    # the Dockerfile is unchanged. That is also what keeps the cuda and cuda13
+    # variants apart: they share base-cuda.Dockerfile and differ only in these.
     h="$( {
         sha256sum "${SCRIPT_DIR}/base-${BACKEND}.Dockerfile"
         if [[ "${BACKEND}" == "cuda" ]]; then
             echo "${CMAKE_CUDA_ARCHITECTURES}"
             echo "${CUDA_VERSION}"
+            echo "${CUDA_DEVEL_IMAGE}"
         fi
     } | sha256sum | cut -c1-12)"
     echo "${ARTIFACT_REPO}:base-${VARIANT}${ARCH_TAG}-${h}"
@@ -567,7 +604,7 @@ build_base() {
     local args=()
     if [[ "${BACKEND}" == "cuda" ]]; then
         args+=(--build-arg "CMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES}")
-        args+=(--build-arg "CUDA_VERSION=${CUDA_VERSION}")
+        args+=(--build-arg "CUDA_DEVEL_IMAGE=${CUDA_DEVEL_IMAGE}")
     fi
     echo ""
     echo "=========================================="
@@ -623,6 +660,9 @@ build_runtime() {
         --build-arg "CMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES}"
         --build-arg "VARIANT=${VARIANT}"
     )
+    if [[ "${BACKEND}" == "cuda" ]]; then
+        args+=(--build-arg "CUDA_RUNTIME_IMAGE=${CUDA_RUNTIME_IMAGE}")
+    fi
     local project
     while read -r project; do
         args+=(--build-arg "$(project_image_arg "${project}")=$(artifact_tag "${project}")")

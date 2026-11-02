@@ -16,6 +16,7 @@ ARG AUDIO_IMAGE
 ARG LLAMA_IMAGE
 ARG IK_LLAMA_IMAGE=ik-llama-empty
 ARG CUDA_VERSION=12.9.1
+ARG CUDA_RUNTIME_IMAGE=nvidia/cuda:12.9.1-runtime-ubuntu24.04@sha256:1287141d283b8f06f45681b56a48a85791398c615888b1f96bfb9fc981392d98
 
 FROM ${WHISPER_IMAGE} AS whisper-src
 FROM ${SD_IMAGE} AS sd-src
@@ -26,7 +27,7 @@ FROM ${LLAMA_IMAGE} AS llama-src
 # COPY below always has a real (if empty) /install/bin and needs no backend
 # branching. build-image.sh passes a real artifacts image for every backend
 # it drives, and BuildKit prunes this stage when it does.
-FROM ubuntu:24.04 AS ik-llama-empty
+FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852 AS ik-llama-empty
 RUN mkdir -p /install/bin
 FROM ${IK_LLAMA_IMAGE} AS ik-llama-src
 
@@ -42,7 +43,7 @@ RUN bash /build/install-llama-swap.sh "${LS_VERSION}"
 # vllm-wrapper is not shipped in the llama-swap release archives, so it is
 # compiled from the same revision as the llama-swap binary above.
 
-FROM golang:1.27-bookworm AS vllm-wrapper-build
+FROM golang:1.27-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9 AS vllm-wrapper-build
 ARG LS_VERSION=latest
 COPY lib-release.sh install-vllm-wrapper.sh /build/
 RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build \
@@ -55,7 +56,7 @@ RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build \
 # inference servers in a namespace; see cmd/kubeswap/README.md. Like
 # vllm-wrapper it is compiled from the same revision as llama-swap.
 
-FROM golang:1.27-bookworm AS kubeswap-build
+FROM golang:1.27-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9 AS kubeswap-build
 # Same LS_VERSION as the other Go stages, so one build arg (or the CI's
 # single resolved revision) controls llama-swap, vllm-wrapper and
 # kubeswap together. If that revision predates cmd/kubeswap (no release
@@ -74,8 +75,7 @@ RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build \
 # stage is unreachable for vulkan builds, so BuildKit never resolves it there.
 FROM ${BUILDER_BASE} AS cuda-stubs
 
-ARG CUDA_VERSION=12.9.1
-FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu24.04 AS runtime-cuda
+FROM ${CUDA_RUNTIME_IMAGE} AS runtime-cuda
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
@@ -93,7 +93,7 @@ COPY --from=cuda-stubs /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/li
 
 # ──
 
-FROM ubuntu:24.04 AS runtime-vulkan
+FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852 AS runtime-vulkan
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/bin:${PATH}"
