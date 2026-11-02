@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -144,5 +147,252 @@ func TestProxy_StaleWakeIsNotTracked(t *testing.T) {
 	p.setStatus(ready)
 	if d := p.lastWakeDuration(); d != 0 {
 		t.Fatalf("stale wake should be discarded, got %v", d)
+	}
+}
+
+func TestBuildMagicPacket_Valid(t *testing.T) {
+	mac := "00:11:22:33:44:55"
+	packet, err := buildMagicPacket(mac)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(packet) != 102 {
+		t.Fatalf("expected packet length 102, got %d", len(packet))
+	}
+	for i := 0; i < 6; i++ {
+		if packet[i] != 0xFF {
+			t.Fatalf("expected 0xFF at index %d, got 0x%02X", i, packet[i])
+		}
+	}
+	expectedPayload := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
+	for i := 1; i <= 16; i++ {
+		chunk := packet[i*6 : (i+1)*6]
+		if !bytes.Equal(chunk, expectedPayload) {
+			t.Fatalf("repetition %d mismatch: got %v, want %v", i, chunk, expectedPayload)
+		}
+	}
+}
+
+func TestBuildMagicPacket_Invalid(t *testing.T) {
+	for _, tc := range []string{"", "invalid", "00:11:22:33:44:55:66:77"} {
+		if _, err := buildMagicPacket(tc); err == nil {
+			t.Fatalf("expected error for MAC %q, got nil", tc)
+		}
+	}
+}
+
+func TestSendMagicPacket_InvalidMAC(t *testing.T) {
+	if err := sendMagicPacket("invalid-mac"); err == nil {
+		t.Fatal("expected error for invalid MAC, got nil")
+	}
+}
+
+func TestWaitForReady_Timeout(t *testing.T) {
+	p := newTestProxy(t, false)
+	ctx := context.Background()
+	if p.waitForReady(ctx, 10*time.Millisecond) {
+		t.Fatal("expected waitForReady to return false on timeout")
+	}
+}
+
+func TestWaitForReady_BecomesReady(t *testing.T) {
+	p := newTestProxy(t, false)
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		p.setStatus(ready)
+	}()
+	ctx := context.Background()
+	if !p.waitForReady(ctx, 1*time.Second) {
+		t.Fatal("expected waitForReady to return true once ready")
+	}
+}
+
+// dummyCloser records whether Close was called on it.
+type dummyCloser struct {
+	closed atomic.Bool
+}
+
+// Close marks the closer as closed.
+func (d *dummyCloser) Close() error {
+	d.closed.Store(true)
+	return nil
+}
+
+// isClosed reports whether Close was called.
+func (d *dummyCloser) isClosed() bool {
+	return d.closed.Load()
+}
+
+// TestProxy_HealthCheckCancelledCtx verifies that a pre-cancelled context causes the health check to return quietly.
+func TestProxy_HealthCheckCancelledCtx(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	p := newTestProxy(t, false)
+	p.setStatus(ready)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	client := &http.Client{Timeout: healthCheckTimeout}
+	probeHealth(ctx, client, p, ts.URL)
+
+	if got := p.getStatus(); got != ready {
+		t.Fatalf("status changed to %v, want %v", got, ready)
+	}
+	if got := p.getFailures(); got != 0 {
+		t.Fatalf("failures changed to %d, want 0", got)
+	}
+}
+
+// TestProxy_HealthCheckCancelledInFlight verifies that cancelling context in flight causes health check to return quietly.
+func TestProxy_HealthCheckCancelledInFlight(t *testing.T) {
+	started := make(chan struct{})
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-r.Context().Done()
+	}))
+	defer ts.Close()
+
+	p := newTestProxy(t, false)
+	p.setStatus(ready)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-started
+		cancel()
+	}()
+
+	client := &http.Client{Timeout: healthCheckTimeout}
+	probeHealth(ctx, client, p, ts.URL)
+
+	if got := p.getStatus(); got != ready {
+		t.Fatalf("status changed to %v, want %v", got, ready)
+	}
+	if got := p.getFailures(); got != 0 {
+		t.Fatalf("failures changed to %d, want 0", got)
+	}
+}
+
+// TestProxy_RunHealthCheckerCancelledCtx verifies runHealthChecker returns immediately when context is cancelled.
+func TestProxy_RunHealthCheckerCancelledCtx(t *testing.T) {
+	p := newTestProxy(t, false)
+	p.setStatus(ready)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	runHealthChecker(ctx, p, "http://127.0.0.1:1/health")
+
+	if got := p.getStatus(); got != ready {
+		t.Fatalf("status changed to %v, want %v", got, ready)
+	}
+	if got := p.getFailures(); got != 0 {
+		t.Fatalf("failures changed to %d, want 0", got)
+	}
+}
+
+// TestProxy_SSEMonitorCancelledCtx verifies runSSEMonitor returns immediately when context is pre-cancelled.
+func TestProxy_SSEMonitorCancelledCtx(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	p := newTestProxy(t, false)
+	p.setStatus(ready)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	runSSEMonitor(ctx, p, ts.URL, "")
+
+	if got := p.getStatus(); got != ready {
+		t.Fatalf("status changed to %v, want %v", got, ready)
+	}
+	if got := p.getFailures(); got != 0 {
+		t.Fatalf("failures changed to %d, want 0", got)
+	}
+}
+
+// TestProxy_SSEMonitorCancelledInFlight verifies that cancelling context in flight causes SSE monitor to return quietly.
+func TestProxy_SSEMonitorCancelledInFlight(t *testing.T) {
+	started := make(chan struct{})
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-r.Context().Done()
+	}))
+	defer ts.Close()
+
+	p := newTestProxy(t, false)
+	p.setStatus(ready)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-started
+		cancel()
+	}()
+
+	runSSEMonitor(ctx, p, ts.URL, "")
+
+	if got := p.getStatus(); got != ready {
+		t.Fatalf("status changed to %v, want %v", got, ready)
+	}
+	if got := p.getFailures(); got != 0 {
+		t.Fatalf("failures changed to %d, want 0", got)
+	}
+}
+
+// TestProxy_StaleProbeDoesNotCloseCurrentStream verifies that a stale health probe does not close a newer stream.
+func TestProxy_StaleProbeDoesNotCloseCurrentStream(t *testing.T) {
+	inFlight := make(chan struct{})
+	release := make(chan struct{})
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(inFlight)
+		<-release
+		hj, ok := w.(http.Hijacker)
+		if ok {
+			conn, _, err := hj.Hijack()
+			if err == nil {
+				if closeErr := conn.Close(); closeErr != nil {
+					t.Logf("failed to close hijacked connection: %v", closeErr)
+				}
+			}
+		}
+	}))
+	defer ts.Close()
+
+	p := newTestProxy(t, false)
+	p.setStatus(ready)
+
+	stream1 := &dummyCloser{}
+	p.setSSEBody(stream1)
+
+	stream2 := &dummyCloser{}
+	probeDone := make(chan struct{})
+
+	go func() {
+		client := &http.Client{Timeout: healthCheckTimeout}
+		probeHealth(context.Background(), client, p, ts.URL)
+		close(probeDone)
+	}()
+
+	<-inFlight
+	p.setSSEBody(stream2)
+	close(release)
+
+	<-probeDone
+
+	if stream2.isClosed() {
+		t.Fatal("stale health probe closed the newer stream")
+	}
+	if got := p.getStatus(); got != ready {
+		t.Fatalf("status changed to %v, want %v", got, ready)
+	}
+	if got := p.getFailures(); got != 0 {
+		t.Fatalf("failures changed to %d, want 0", got)
 	}
 }
