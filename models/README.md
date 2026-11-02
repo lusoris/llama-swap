@@ -1,4 +1,6 @@
-TODO improve these docs
+# Test models
+
+This folder holds small GGUF models used to try model swapping locally with the steps below.
 
 1. Download a llama-server suitable for your architecture
 1. Fetch some small models for testing / swapping between

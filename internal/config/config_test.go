@@ -116,8 +116,6 @@ store:
 
 func TestConfig_FindConfig(t *testing.T) {
 
-	// TODO?
-	// make make this shared between the different tests
 	config := &Config{
 		Models: map[string]ModelConfig{
 			"model1": {
@@ -1606,7 +1604,7 @@ models:
 		t.Setenv("TEST_INLINE_KEY", "real-value")
 
 		content := `
-apiKeys: ["${env.TEST_INLINE_KEY}"] # TODO: add ${env.FUTURE_KEY} later
+apiKeys: ["${env.TEST_INLINE_KEY}"] # later: add ${env.FUTURE_KEY}
 models:
   test:
     cmd: "server"
