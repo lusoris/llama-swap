@@ -60,7 +60,7 @@ func sendRequest(ctx context.Context, baseURL, model, prompt string, maxTokens, 
 	if resp.StatusCode != http.StatusOK {
 		b, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return fmt.Errorf("status %d: error reading body: %v", resp.StatusCode, err)
+			return fmt.Errorf("status %d: error reading body: %w", resp.StatusCode, err)
 		}
 		return fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
 	}

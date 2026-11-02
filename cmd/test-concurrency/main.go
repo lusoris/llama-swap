@@ -79,13 +79,17 @@ func main() {
 	var wg sync.WaitGroup
 	start := time.Now()
 
-	// Streams run until the model finishes; the process ends them on exit.
-	dispatchRequests(context.Background(), prog, baseURL, models, prompt, maxTokens, &wg)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dispatchRequests(ctx, prog, baseURL, models, prompt, maxTokens, &wg)
 
 	if _, err := prog.Run(); err != nil {
+		cancel()
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
+	cancel()
 
 	wg.Wait()
 	printSummary(m, start)

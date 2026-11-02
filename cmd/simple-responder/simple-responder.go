@@ -182,7 +182,11 @@ func audioTranscriptionsHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Error getting file: %s", err)})
 		return
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("close file error: %v", err)
+		}
+	}()
 
 	// Read the file content to get its size
 	fileBytes, err := io.ReadAll(file)
@@ -284,7 +288,11 @@ func sdapiTxt2ImgHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read request body"})
 		return
 	}
-	defer c.Request.Body.Close()
+	defer func() {
+		if err := c.Request.Body.Close(); err != nil {
+			log.Printf("close request body error: %v", err)
+		}
+	}()
 
 	modelName := gjson.GetBytes(body, "model").String()
 	c.JSON(http.StatusOK, gin.H{
@@ -299,7 +307,11 @@ func sdapiImg2ImgHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read request body"})
 		return
 	}
-	defer c.Request.Body.Close()
+	defer func() {
+		if err := c.Request.Body.Close(); err != nil {
+			log.Printf("close request body error: %v", err)
+		}
+	}()
 
 	modelName := gjson.GetBytes(body, "model").String()
 	c.JSON(http.StatusOK, gin.H{
