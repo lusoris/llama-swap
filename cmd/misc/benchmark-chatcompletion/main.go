@@ -100,7 +100,9 @@ func runWorker(workerID int, cfg benchmarkConfig, client *http.Client, requests 
 		if _, err := io.Copy(io.Discard, resp.Body); err != nil {
 			log.Printf("[worker %d][req %d] read body error: %v", workerID, reqID, err)
 		}
-		resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("[worker %d][req %d] close body error: %v", workerID, reqID, err)
+		}
 		cancel()
 
 		// Record status code

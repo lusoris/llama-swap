@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -107,7 +106,38 @@ func sendChunk(w http.ResponseWriter, content string, finishReason *string) erro
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(w, "data: %s\n\n", data)
+	err = writeSSE(w, data)
+	return err
+}
+
+// sendRoleChunk writes the initial assistant role delta chunk to the stream.
+func sendRoleChunk(w http.ResponseWriter) error {
+	first := chatChunk{
+		ID:      "chatcmpl-fake",
+		Object:  "chat.completion.chunk",
+		Created: time.Now().Unix(),
+		Model:   "fake-model",
+		Choices: []chunkChoice{
+			{Index: 0, Delta: chunkDelta{Role: "assistant"}},
+		},
+	}
+	data, err := json.Marshal(first)
+	if err != nil {
+		return err
+	}
+	err = writeSSE(w, data)
+	return err
+}
+
+// writeSSE writes one SSE data event.
+func writeSSE(w io.Writer, data []byte) error {
+	_, err := io.WriteString(w, "data: "+string(data)+"\n\n")
+	return err
+}
+
+// sendDoneChunk writes the SSE stream termination chunk.
+func sendDoneChunk(w http.ResponseWriter) error {
+	err := writeSSE(w, []byte("[DONE]"))
 	return err
 }
 
@@ -198,19 +228,10 @@ func handleStreaming(w http.ResponseWriter, ctx context.Context, tokens int, tps
 	}
 
 	// Send role delta first
-	first := chatChunk{
-		ID:      "chatcmpl-fake",
-		Object:  "chat.completion.chunk",
-		Created: time.Now().Unix(),
-		Model:   "fake-model",
-		Choices: []chunkChoice{
-			{Index: 0, Delta: chunkDelta{Role: "assistant"}},
-		},
+	if err := sendRoleChunk(w); err != nil {
+		return
 	}
-	if data, err := json.Marshal(first); err == nil {
-		fmt.Fprintf(w, "data: %s\n\n", data)
-		flusher.Flush()
-	}
+	flusher.Flush()
 
 	interval := time.Duration(float64(time.Second) / tps)
 	ticker := time.NewTicker(interval)
@@ -237,7 +258,9 @@ func handleStreaming(w http.ResponseWriter, ctx context.Context, tokens int, tps
 		flusher.Flush()
 	}
 
-	fmt.Fprintf(w, "data: [DONE]\n\n")
+	if err := sendDoneChunk(w); err != nil {
+		return
+	}
 	flusher.Flush()
 }
 
