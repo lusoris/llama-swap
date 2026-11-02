@@ -211,21 +211,27 @@ type BuildInfo struct {
 	Date    string
 }
 
-func New(cfg config.Config, logs *logmon.Group, perfMon *perf.Monitor, st store.Store, build BuildInfo, hardware *hw.HardwareSnapshot, refs *docagent.Docs) (*Server, error) {
-	var local router.LocalRouter
-	var err error
-
+func createLocalRouter(cfg config.Config, logs *logmon.Group) (router.LocalRouter, error) {
 	switch cfg.Routing.Router.Use {
 	case "matrix":
-		local, err = router.NewMatrix(cfg, logs)
+		local, err := router.NewMatrix(cfg, logs)
 		if err != nil {
 			return nil, fmt.Errorf("creating matrix router: %w", err)
 		}
+		return local, nil
 	default: // "group"
-		local, err = router.NewGroup(cfg, logs)
+		local, err := router.NewGroup(cfg, logs)
 		if err != nil {
 			return nil, fmt.Errorf("creating group router: %w", err)
 		}
+		return local, nil
+	}
+}
+
+func New(cfg config.Config, logs *logmon.Group, perfMon *perf.Monitor, st store.Store, build BuildInfo, hardware *hw.HardwareSnapshot, refs *docagent.Docs) (*Server, error) {
+	local, err := createLocalRouter(cfg, logs)
+	if err != nil {
+		return nil, err
 	}
 
 	peer, err := router.NewPeer(cfg, logs.ProxyLogs)
@@ -315,10 +321,12 @@ func (s *Server) serveConfiguredVoices(w http.ResponseWriter, r *http.Request, m
 		return false
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"voices": mc.Capabilities.Voices,
 		"model":  modelID,
-	})
+	}); err != nil {
+		s.logs.ProxyLogs.Errorf("serveConfiguredVoices encode failed: %v", err)
+	}
 	return true
 }
 
@@ -340,8 +348,21 @@ func stripAudioAPIPrefix(r *http.Request) {
 // routes builds the mux, registers every route, and wraps the mux with the
 // global CORS middleware.
 func (s *Server) routes() {
-
 	authMW := CreateAuthMiddleware(s.cfg)
+	apiChain := chain.New(authMW)
+	modelChain := s.buildModelChain(authMW)
+
+	mux := http.NewServeMux()
+	s.registerModelRoutes(mux, modelChain)
+	s.registerAPIRoutes(mux, apiChain)
+	s.registerUIRoutes(mux, authMW)
+	s.registerPassthroughRoutes(mux, apiChain)
+
+	s.mux = mux
+	s.handler = chain.New(CreateRequestLogMiddleware(s.logs.HttpLogs), CreateCORSMiddleware(s.cfg)).Then(mux)
+}
+
+func (s *Server) buildModelChain(authMW chain.Middleware) chain.Chain {
 	modelMWs := []chain.Middleware{authMW, createContentTypeMiddleware()}
 	// globalConcurrencyLimit guards the top of the inference chain; a limit of
 	// 0 (the default) means no limit, so the handler is left out of the chain
@@ -358,11 +379,10 @@ func (s *Server) routes() {
 		CreateFormFilterMiddleware(s.cfg),
 		CreateMetricsMiddleware(s.metrics, s.cfg),
 	)
-	modelChain := chain.New(modelMWs...)
-	// Custom endpoints only need auth.
-	apiChain := chain.New(authMW)
+	return chain.New(modelMWs...)
+}
 
-	mux := http.NewServeMux()
+func (s *Server) registerModelRoutes(mux *http.ServeMux, modelChain chain.Chain) {
 	dispatch := http.HandlerFunc(s.localPeerHandler)
 
 	for _, path := range modelPostJSONRoutes {
@@ -374,18 +394,9 @@ func (s *Server) routes() {
 	for _, path := range modelGetRoutes {
 		mux.Handle("GET "+path, modelChain.Then(dispatch))
 	}
+}
 
-	// llama-swap API + custom endpoints.
-	mux.Handle("GET /v1/models", apiChain.ThenFunc(s.handleListModels))
-	mux.Handle("GET /models", apiChain.ThenFunc(s.handleListModels))
-	mux.Handle("GET /logs", apiChain.ThenFunc(s.handleLogs))
-	mux.Handle("GET /logs/stream", apiChain.ThenFunc(s.handleLogStream))
-	mux.Handle("GET /logs/stream/{logMonitorID...}", apiChain.ThenFunc(s.handleLogStream))
-
-	mux.HandleFunc("GET /health", handleHealth)
-	mux.HandleFunc("GET /wol-health", handleHealth)
-	mux.HandleFunc("GET /{$}", handleRootRedirect)
-
+func (s *Server) registerUIRoutes(mux *http.ServeMux, authMW chain.Middleware) {
 	// Embedded UI. ServeMux's built-in /ui -> /ui/ redirect uses an absolute
 	// Location, which would drop a prefix-stripping reverse proxy's path
 	// prefix; this exact-match route keeps it relative instead (308 preserves
@@ -407,14 +418,9 @@ func (s *Server) routes() {
 		mux.HandleFunc("GET /ui/"+name, s.handleUI)
 	}
 	mux.HandleFunc("GET /favicon.ico", s.handleFavicon)
+}
 
-	// Prometheus metrics (wrapped by apiChain, matches the legacy endpoint).
-	mux.Handle("GET /metrics", apiChain.ThenFunc(s.handleMetrics))
-
-	// Operations endpoints.
-	mux.Handle("GET /unload", apiChain.ThenFunc(s.handleUnload))
-	mux.Handle("GET /running", apiChain.ThenFunc(s.handleRunning))
-
+func (s *Server) registerPassthroughRoutes(mux *http.ServeMux, apiChain chain.Chain) {
 	// Upstream passthrough. Meter only the model-dispatched endpoints that can
 	// produce token usage/timings.
 	upstreamChain := apiChain.Append(
@@ -435,6 +441,26 @@ func (s *Server) routes() {
 	// requests do not have to name a model.
 	mux.Handle("/audiocpp", apiChain.ThenFunc(handleAudioCppRedirect))
 	mux.Handle("/audiocpp/{audioCppPath...}", apiChain.ThenFunc(s.handleAudioCpp))
+}
+
+func (s *Server) registerAPIRoutes(mux *http.ServeMux, apiChain chain.Chain) {
+	// llama-swap API + custom endpoints.
+	mux.Handle("GET /v1/models", apiChain.ThenFunc(s.handleListModels))
+	mux.Handle("GET /models", apiChain.ThenFunc(s.handleListModels))
+	mux.Handle("GET /logs", apiChain.ThenFunc(s.handleLogs))
+	mux.Handle("GET /logs/stream", apiChain.ThenFunc(s.handleLogStream))
+	mux.Handle("GET /logs/stream/{logMonitorID...}", apiChain.ThenFunc(s.handleLogStream))
+
+	mux.HandleFunc("GET /health", handleHealth)
+	mux.HandleFunc("GET /wol-health", handleHealth)
+	mux.HandleFunc("GET /{$}", handleRootRedirect)
+
+	// Prometheus metrics (wrapped by apiChain, matches the legacy endpoint).
+	mux.Handle("GET /metrics", apiChain.ThenFunc(s.handleMetrics))
+
+	// Operations endpoints.
+	mux.Handle("GET /unload", apiChain.ThenFunc(s.handleUnload))
+	mux.Handle("GET /running", apiChain.ThenFunc(s.handleRunning))
 
 	// API group (API-key protected) consumed by the UI.
 	mux.Handle("POST /api/models/unload", apiChain.ThenFunc(s.handleAPIUnloadAll))
@@ -459,9 +485,6 @@ func (s *Server) routes() {
 	// Registered without a method so non-POST reaches the handler and gets a
 	// 405 with Allow, rather than the mux's bare 404.
 	mux.Handle("/api/mcp", apiChain.ThenFunc(s.handleAPIMCP))
-
-	s.mux = mux
-	s.handler = chain.New(CreateRequestLogMiddleware(s.logs.HttpLogs), CreateCORSMiddleware(s.cfg)).Then(mux)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

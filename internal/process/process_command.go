@@ -109,6 +109,8 @@ type ProcessCommand struct {
 	id        string
 	config    config.ModelConfig
 	parentCtx context.Context
+	// detachedCtx keeps parentCtx values without its cancel; killProcess owns teardown.
+	detachedCtx context.Context
 
 	processLogger *logmon.Monitor
 	proxyLogger   *logmon.Monitor
@@ -149,6 +151,7 @@ func New(
 		id:            id,
 		config:        conf,
 		parentCtx:     parentCtx,
+		detachedCtx:   context.WithoutCancel(parentCtx),
 		processLogger: processLogger,
 		proxyLogger:   proxyLogger,
 
@@ -360,7 +363,7 @@ func (l *lifecycle) onStart(req startReq) bool {
 	}
 	l.setState(StateStarting)
 
-	startCtx, cancelStart := context.WithCancel(context.Background())
+	startCtx, cancelStart := context.WithCancel(p.detachedCtx)
 	resultCh := make(chan startResult, 1)
 	go func() {
 		resultCh <- p.doStart(startCtx, req.timeout)
@@ -577,7 +580,7 @@ func (p *ProcessCommand) newProxyHandler(reverseProxy *httputil.ReverseProxy) ht
 // cmd.WaitDelay only acts as the inherited-pipe backstop measured from
 // process exit (see killProcess).
 func (p *ProcessCommand) newUpstreamCmd(args []string) (*exec.Cmd, context.CancelFunc) {
-	cmdCtx, cmdCancel := context.WithCancel(context.Background())
+	cmdCtx, cmdCancel := context.WithCancel(p.detachedCtx)
 	cmd := exec.CommandContext(cmdCtx, args[0], args[1:]...)
 	cmd.Stderr = p.processLogger
 	cmd.Stdout = p.processLogger
@@ -816,7 +819,13 @@ func (p *ProcessCommand) sendStopSignal(cmd *exec.Cmd) error {
 		)
 		if err == nil {
 			p.processLogger.Debugf("<%s> sendStopSignal() running stop command: %s", p.id, strings.Join(stopArgs, " "))
-			stopCmd := exec.Command(stopArgs[0], stopArgs[1:]...)
+			timeout := time.Duration(p.config.UnloadTimeout) * time.Second
+			if timeout <= 0 {
+				timeout = 30 * time.Second
+			}
+			stopCtx, cancel := context.WithTimeout(p.detachedCtx, timeout)
+			defer cancel()
+			stopCmd := exec.CommandContext(stopCtx, stopArgs[0], stopArgs[1:]...)
 			stopCmd.Stderr = p.processLogger
 			stopCmd.Stdout = p.processLogger
 			// Bound the pipe copy so a CmdStop that backgrounds a child
@@ -903,7 +912,9 @@ func (p *ProcessCommand) killProcess(cmd *exec.Cmd, cancel context.CancelFunc, c
 	if cmd != nil {
 		// SIGKILL the whole process group on Unix so any descendant that
 		// ignored or outlived the graceful signal is force-terminated too.
-		_ = killProcessTree(cmd)
+		if err := killProcessTree(cmd); err != nil {
+			p.proxyLogger.Warnf("<%s> killProcessTree failed: %v", p.id, err)
+		}
 	}
 	<-cmdDone
 }

@@ -55,6 +55,40 @@ func getGpuStats(ctx context.Context, every time.Duration, logger *logmon.Monito
 	return nil, ErrNoGpuTool
 }
 
+func readLACTStats(socketPath string, logger *logmon.Monitor) []GpuStat {
+	dialer := &net.Dialer{Timeout: 2 * time.Second}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, err := dialer.DialContext(ctx, "unix", socketPath)
+	if err != nil {
+		return nil
+	}
+	defer func() {
+		if closeErr := conn.Close(); closeErr != nil {
+			logger.Debugf("LACT close: %v", closeErr)
+		}
+	}()
+	if dlErr := conn.SetDeadline(time.Now().Add(5 * time.Second)); dlErr != nil {
+		logger.Debugf("LACT SetDeadline: %v", dlErr)
+		return nil
+	}
+
+	devices, err := lactListDevices(conn)
+	if err != nil {
+		return nil
+	}
+
+	stats := make([]GpuStat, 0, len(devices))
+	for i, d := range devices {
+		stat, err := lactGetDeviceStats(conn, d.ID, d.Name, i)
+		if err != nil || stat.MemTotalMB == 0 {
+			continue
+		}
+		stats = append(stats, stat)
+	}
+	return stats
+}
+
 func tryLACT(ctx context.Context, every time.Duration, logger *logmon.Monitor) (chan []GpuStat, error) {
 	socketPath := lactSocketPath()
 	if socketPath == "" {
@@ -85,7 +119,7 @@ func tryLACT(ctx context.Context, every time.Duration, logger *logmon.Monitor) (
 		ticker := time.NewTicker(every)
 		defer ticker.Stop()
 
-		for {
+		for ctx.Err() == nil {
 			select {
 			case <-ctx.Done():
 				return
@@ -95,31 +129,7 @@ func tryLACT(ctx context.Context, every time.Duration, logger *logmon.Monitor) (
 					continue
 				}
 
-				conn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
-				if err != nil {
-					continue
-				}
-				conn.SetDeadline(time.Now().Add(5 * time.Second))
-
-				devices, err := lactListDevices(conn)
-				if err != nil {
-					conn.Close()
-					continue
-				}
-
-				stats := make([]GpuStat, 0, len(devices))
-				for i, d := range devices {
-					stat, err := lactGetDeviceStats(conn, d.ID, d.Name, i)
-					if err != nil {
-						continue
-					}
-					if stat.MemTotalMB == 0 {
-						continue
-					}
-					stats = append(stats, stat)
-				}
-				conn.Close()
-
+				stats := readLACTStats(socketPath, logger)
 				if len(stats) > 0 {
 					select {
 					case ch <- stats:
@@ -186,6 +196,44 @@ func tryNvidiaSmi(ctx context.Context, every time.Duration, logger *logmon.Monit
 	return ch, nil
 }
 
+func pollRocmSmi(ctx context.Context, logger *logmon.Monitor) []GpuStat {
+	const pollTimeout = 5 * time.Second
+	pollCtx, cancel := context.WithTimeout(ctx, pollTimeout)
+	cmd := exec.CommandContext(pollCtx, "rocm-smi", "-i", "-P", "-t", "-f", "-u", "--showmemuse", "--showmeminfo", "vram", "--showproductname", "--csv")
+	out, err := cmd.Output()
+	timedOut := pollCtx.Err() == context.DeadlineExceeded
+	cancel()
+	if err != nil {
+		if timedOut {
+			logger.Debug("rocm-smi timed out")
+		}
+		return nil
+	}
+	return parseRocmSmiOutput(out)
+}
+
+func parseRocmSmiOutput(out []byte) []GpuStat {
+	stats := make([]GpuStat, 0)
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	var header string
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "device,") {
+			header = line
+			continue
+		}
+
+		stat := parseRocmSmiLine(header, line)
+		if stat != nil {
+			stats = append(stats, *stat)
+		}
+	}
+	return stats
+}
+
 func tryRocmSmi(ctx context.Context, every time.Duration, logger *logmon.Monitor) (chan []GpuStat, error) {
 	if _, err := exec.LookPath("rocm-smi"); err != nil {
 		return nil, ErrNoGpuTool
@@ -193,7 +241,6 @@ func tryRocmSmi(ctx context.Context, every time.Duration, logger *logmon.Monitor
 	if every < time.Second {
 		every = time.Second
 	}
-	const pollTimeout = 5 * time.Second
 
 	ch := make(chan []GpuStat, 1)
 
@@ -202,42 +249,12 @@ func tryRocmSmi(ctx context.Context, every time.Duration, logger *logmon.Monitor
 		ticker := time.NewTicker(every)
 		defer ticker.Stop()
 
-		for {
+		for ctx.Err() == nil {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				pollCtx, cancel := context.WithTimeout(ctx, pollTimeout)
-				cmd := exec.CommandContext(pollCtx, "rocm-smi", "-i", "-P", "-t", "-f", "-u", "--showmemuse", "--showmeminfo", "vram", "--showproductname", "--csv")
-				out, err := cmd.Output()
-				timedOut := pollCtx.Err() == context.DeadlineExceeded
-				cancel()
-				if err != nil {
-					if timedOut {
-						logger.Debug("rocm-smi timed out")
-					}
-					continue
-				}
-
-				stats := make([]GpuStat, 0)
-				scanner := bufio.NewScanner(strings.NewReader(string(out)))
-				var header string
-				for scanner.Scan() {
-					line := strings.TrimSpace(scanner.Text())
-					if line == "" {
-						continue
-					}
-					if strings.HasPrefix(line, "device,") {
-						header = line
-						continue
-					}
-
-					stat := parseRocmSmiLine(header, line)
-					if stat != nil {
-						stats = append(stats, *stat)
-					}
-				}
-
+				stats := pollRocmSmi(ctx, logger)
 				if len(stats) > 0 {
 					select {
 					case ch <- stats:
@@ -249,6 +266,73 @@ func tryRocmSmi(ctx context.Context, every time.Duration, logger *logmon.Monitor
 	}()
 
 	return ch, nil
+}
+
+type rocmSmiMeta struct {
+	device     string
+	deviceName string
+	cardSeries string
+	gfxVersion string
+}
+
+func applyRocmSmiCol(col, val string, result *GpuStat, meta *rocmSmiMeta) bool {
+	const toMB = 1024 * 1024
+	switch col {
+	case "device":
+		meta.device = val
+		id, err := strconv.Atoi(strings.TrimPrefix(val, "card"))
+		if err != nil {
+			return false
+		}
+		result.ID = id
+	case "Device Name":
+		meta.deviceName = val
+	case "GUID":
+		result.UUID = val
+	case "Temperature (Sensor edge) (C)":
+		if tempC, err := strconv.ParseFloat(val, 64); err == nil {
+			result.TempC = int(tempC)
+		}
+	case "Temperature (Sensor memory) (C)":
+		if vramTempC, err := strconv.ParseFloat(val, 64); err == nil {
+			result.VramTempC = int(vramTempC)
+		}
+	case "Fan speed (%)":
+		if fanSpeed, err := strconv.ParseFloat(val, 64); err == nil {
+			result.FanSpeedPct = fanSpeed
+		}
+	case "Current Socket Graphics Package Power (W)", "Average Graphics Package Power (W)":
+		if powerDraw, err := strconv.ParseFloat(val, 64); err == nil {
+			result.PowerDrawW = powerDraw
+		}
+	case "GPU use (%)":
+		if gpuUtil, err := strconv.ParseFloat(val, 64); err == nil {
+			result.GpuUtilPct = gpuUtil
+		}
+	case "VRAM Total Memory (B)":
+		if memTotal, err := strconv.ParseUint(val, 10, 64); err == nil {
+			result.MemTotalMB = int(memTotal / toMB)
+		}
+	case "VRAM Total Used Memory (B)":
+		if memUsed, err := strconv.ParseUint(val, 10, 64); err == nil {
+			result.MemUsedMB = int(memUsed / toMB)
+		}
+	case "Card Series":
+		meta.cardSeries = val
+	case "GFX Version":
+		meta.gfxVersion = val
+	}
+	return true
+}
+
+func formatRocmDeviceName(meta rocmSmiMeta) string {
+	if meta.cardSeries != "" && meta.cardSeries != "N/A" {
+		return meta.cardSeries + " " + meta.device + " (" + meta.gfxVersion + ")"
+	}
+	if meta.deviceName != "" && meta.deviceName != "N/A" {
+		return meta.deviceName + " " + meta.device + " (" + meta.gfxVersion + ")"
+	}
+	return meta.device
 }
 
 func parseRocmSmiLine(header string, line string) *GpuStat {
@@ -265,55 +349,12 @@ func parseRocmSmiLine(header string, line string) *GpuStat {
 		Timestamp: time.Now(),
 		ID:        -1,
 	}
-
-	var device string
-	var deviceName string
-	var cardSeries string
-	var gfxVersion string
-
-	const toMB = 1024 * 1024
+	var meta rocmSmiMeta
 
 	for i, col := range labels {
 		val := strings.TrimSpace(fields[i])
-		switch col {
-		case "device":
-			device = val
-			id, err := strconv.Atoi(strings.TrimPrefix(val, "card"))
-			if err != nil {
-				return nil
-			}
-			result.ID = id
-		case "Device Name":
-			deviceName = val
-		case "GUID":
-			result.UUID = val
-		case "Temperature (Sensor edge) (C)":
-			tempC, _ := strconv.ParseFloat(val, 64)
-			result.TempC = int(tempC)
-		case "Temperature (Sensor memory) (C)":
-			vramTempC, _ := strconv.ParseFloat(val, 64)
-			result.VramTempC = int(vramTempC)
-		case "Fan speed (%)":
-			fanSpeed, _ := strconv.ParseFloat(val, 64)
-			result.FanSpeedPct = fanSpeed
-		case "Current Socket Graphics Package Power (W)":
-			fallthrough
-		case "Average Graphics Package Power (W)":
-			powerDraw, _ := strconv.ParseFloat(val, 64)
-			result.PowerDrawW = powerDraw
-		case "GPU use (%)":
-			gpuUtil, _ := strconv.ParseFloat(val, 64)
-			result.GpuUtilPct = gpuUtil
-		case "VRAM Total Memory (B)":
-			memTotal, _ := strconv.ParseUint(val, 10, 64)
-			result.MemTotalMB = int(memTotal / toMB)
-		case "VRAM Total Used Memory (B)":
-			memUsed, _ := strconv.ParseUint(val, 10, 64)
-			result.MemUsedMB = int(memUsed / toMB)
-		case "Card Series":
-			cardSeries = val
-		case "GFX Version":
-			gfxVersion = val
+		if !applyRocmSmiCol(col, val, result, &meta) {
+			return nil
 		}
 	}
 
@@ -325,14 +366,7 @@ func parseRocmSmiLine(header string, line string) *GpuStat {
 		result.MemUtilPct = float64(result.MemUsedMB) / float64(result.MemTotalMB) * 100
 	}
 
-	name := device
-	if cardSeries != "" && cardSeries != "N/A" {
-		name = cardSeries + " " + device + " (" + gfxVersion + ")"
-	} else if deviceName != "" && deviceName != "N/A" {
-		name = deviceName + " " + device + " (" + gfxVersion + ")"
-	}
-	result.Name = name
-
+	result.Name = formatRocmDeviceName(meta)
 	return result
 }
 
@@ -438,22 +472,33 @@ func lactListDevices(conn net.Conn) ([]lactDeviceEntry, error) {
 	return devices, nil
 }
 
-func lactGetDeviceStats(conn net.Conn, id string, name string, index int) (GpuStat, error) {
-	data, err := lactSendRequest(conn, lactRequest{
-		Command: "device_stats",
-		Args: struct {
-			ID string `json:"id"`
-		}{ID: id},
-	})
-	if err != nil {
-		return GpuStat{}, err
+func lactExtractTemps(temps map[string]lactTempEntry) (int, int) {
+	var tempC int
+	if t, ok := temps["edge"]; ok && t.Current != nil {
+		tempC = int(*t.Current)
+	} else if t, ok := temps["junction"]; ok && t.Current != nil {
+		tempC = int(*t.Current)
+	} else {
+		for _, t := range temps {
+			if t.Current != nil {
+				tempC = int(*t.Current)
+				break
+			}
+		}
 	}
 
-	var stats lactDeviceStats
-	if err := json.Unmarshal(data, &stats); err != nil {
-		return GpuStat{}, err
+	var vramTempC int
+	// nvidia uses "VRAM", amd "mem"
+	for _, key := range []string{"mem", "VRAM"} {
+		if t, ok := temps[key]; ok && t.Current != nil && *t.Current > 0 {
+			vramTempC = int(*t.Current)
+			break
+		}
 	}
+	return tempC, vramTempC
+}
 
+func lactBuildGpuStat(stats lactDeviceStats, id string, name string, index int) GpuStat {
 	var memUsedMB, memTotalMB int
 	if stats.Vram.Used != nil {
 		memUsedMB = int(*stats.Vram.Used / 1024 / 1024)
@@ -484,28 +529,7 @@ func lactGetDeviceStats(conn net.Conn, id string, name string, index int) (GpuSt
 		powerDraw = *stats.Power.Current
 	}
 
-	var tempC int
-	if t, ok := stats.Temps["edge"]; ok && t.Current != nil {
-		tempC = int(*t.Current)
-	} else if t, ok := stats.Temps["junction"]; ok && t.Current != nil {
-		tempC = int(*t.Current)
-	} else {
-		for _, t := range stats.Temps {
-			if t.Current != nil {
-				tempC = int(*t.Current)
-				break
-			}
-		}
-	}
-
-	var vramTempC int
-	// nvidia uses "VRAM", amd "mem"
-	for _, key := range []string{"mem", "VRAM"} {
-		if t, ok := stats.Temps[key]; ok && t.Current != nil && *t.Current > 0 {
-			vramTempC = int(*t.Current)
-			break
-		}
-	}
+	tempC, vramTempC := lactExtractTemps(stats.Temps)
 
 	return GpuStat{
 		Timestamp:   time.Now(),
@@ -520,7 +544,26 @@ func lactGetDeviceStats(conn net.Conn, id string, name string, index int) (GpuSt
 		MemTotalMB:  memTotalMB,
 		FanSpeedPct: fanSpeed,
 		PowerDrawW:  powerDraw,
-	}, nil
+	}
+}
+
+func lactGetDeviceStats(conn net.Conn, id string, name string, index int) (GpuStat, error) {
+	data, err := lactSendRequest(conn, lactRequest{
+		Command: "device_stats",
+		Args: struct {
+			ID string `json:"id"`
+		}{ID: id},
+	})
+	if err != nil {
+		return GpuStat{}, err
+	}
+
+	var stats lactDeviceStats
+	if err := json.Unmarshal(data, &stats); err != nil {
+		return GpuStat{}, err
+	}
+
+	return lactBuildGpuStat(stats, id, name, index), nil
 }
 
 func readSysStats() (SysStat, error) {
