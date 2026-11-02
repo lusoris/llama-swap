@@ -72,31 +72,46 @@ func scanStream(r io.Reader, idx int, sink deltaSink) error {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "data:") {
+		data, done, ok := sseData(scanner.Text())
+		if done {
+			break
+		}
+		if !ok {
 			continue
 		}
-		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if data == "" || data == "[DONE]" {
-			if data == "[DONE]" {
-				break
-			}
-			continue
-		}
-
-		var chunk streamChunk
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			continue
-		}
-		for _, c := range chunk.Choices {
-			if c.Delta.ReasoningContent != "" {
-				sink(idx, c.Delta.ReasoningContent)
-			}
-			if c.Delta.Content != "" {
-				sink(idx, c.Delta.Content)
-			}
-		}
+		emitChunk(data, idx, sink)
 	}
 
 	return scanner.Err()
+}
+
+// sseData extracts payload data from an SSE line and reports completion.
+func sseData(line string) (data string, done bool, ok bool) {
+	if !strings.HasPrefix(line, "data:") {
+		return "", false, false
+	}
+	data = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+	if data == "" {
+		return "", false, false
+	}
+	if data == "[DONE]" {
+		return "", true, false
+	}
+	return data, false, true
+}
+
+// emitChunk unmarshals a stream chunk and emits reasoning and content deltas.
+func emitChunk(data string, idx int, sink deltaSink) {
+	var chunk streamChunk
+	if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+		return
+	}
+	for _, c := range chunk.Choices {
+		if c.Delta.ReasoningContent != "" {
+			sink(idx, c.Delta.ReasoningContent)
+		}
+		if c.Delta.Content != "" {
+			sink(idx, c.Delta.Content)
+		}
+	}
 }
