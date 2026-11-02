@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"io"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,17 +13,46 @@ import (
 )
 
 func TestStreamStats_ReturnsPromptlyOnCancel(t *testing.T) {
+	origStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	os.Stdout = w
+	t.Cleanup(func() {
+		os.Stdout = origStdout
+		_ = w.Close()
+		_ = r.Close()
+	})
+
+	firstLineCh := make(chan string, 1)
+	go func() {
+		scanner := bufio.NewScanner(r)
+		first := true
+		for scanner.Scan() {
+			line := scanner.Text()
+			if first && (strings.HasPrefix(line, "[SYS") || strings.HasPrefix(line, "[GPU")) {
+				first = false
+				firstLineCh <- line
+			}
+		}
+	}()
+
 	l := logmon.NewWriter(io.Discard)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := make(chan struct{})
 	go func() {
-		streamStats(ctx, 100*time.Millisecond, l)
+		streamStats(ctx, 50*time.Millisecond, l)
 		close(done)
 	}()
 
-	// Wait briefly to allow streamStats to start monitoring and entering select loop
-	time.Sleep(20 * time.Millisecond)
+	select {
+	case <-firstLineCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for first stats line from streamStats within 2s")
+	}
+
 	cancel()
 
 	select {

@@ -90,6 +90,36 @@ func TestSetupRouter_ChatCompletions_Streaming(t *testing.T) {
 	if !strings.HasSuffix(strings.TrimSpace(body), "[DONE]") {
 		t.Errorf("expected streaming body to end with [DONE], got: %q", body)
 	}
+
+	foundExpectedChunk := false
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		dataStr := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if dataStr == "[DONE]" {
+			continue
+		}
+		var parsed struct {
+			Choices []struct {
+				Delta struct {
+					Content string `json:"content"`
+				} `json:"delta"`
+			} `json:"choices"`
+		}
+		if err := json.Unmarshal([]byte(dataStr), &parsed); err == nil {
+			for _, choice := range parsed.Choices {
+				if choice.Delta.Content == "asdf" {
+					foundExpectedChunk = true
+					break
+				}
+			}
+		}
+	}
+	if !foundExpectedChunk {
+		t.Errorf("expected at least one streamed chunk with content %q, got: %q", "asdf", body)
+	}
 }
 
 func TestWaitForShutdown_SigTerm(t *testing.T) {

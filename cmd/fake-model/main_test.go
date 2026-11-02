@@ -40,8 +40,8 @@ func TestStartLoading_PositiveDurationClosesAfterDelay(t *testing.T) {
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("timed out waiting for ready channel to close")
 	}
-	if elapsed := time.Since(start); elapsed < dur/2 {
-		t.Fatalf("channel closed too quickly: elapsed %v, want at least %v", elapsed, dur/2)
+	if elapsed := time.Since(start); elapsed < dur {
+		t.Fatalf("channel closed too quickly: elapsed %v, want at least %v", elapsed, dur)
 	}
 	requireClosed(t, ready)
 }
@@ -103,6 +103,10 @@ func TestHandleNonStreaming_ResponseShape(t *testing.T) {
 	if c := resp.Choices[0]; c.FinishReason != "stop" || c.Message.Role != "assistant" {
 		t.Errorf("unexpected choice: finish_reason %q, role %q", c.FinishReason, c.Message.Role)
 	}
+	wantContent := loremText(tokens)
+	if resp.Choices[0].Message.Content != wantContent {
+		t.Errorf("unexpected message content: got %q, want %q", resp.Choices[0].Message.Content, wantContent)
+	}
 	if resp.Usage.CompletionTokens != tokens || resp.Usage.TotalTokens != tokens {
 		t.Errorf("unexpected usage: %+v, want completion/total tokens %d", resp.Usage, tokens)
 	}
@@ -144,6 +148,25 @@ func (c *cancelOnFirstWriteRecorder) WriteString(s string) (int, error) {
 	return c.Write([]byte(s))
 }
 
+// hasAssistantContentDelta returns true if at least one chunk has non-empty assistant content.
+func hasAssistantContentDelta(body string) bool {
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "data: ") || strings.HasSuffix(line, "[DONE]") {
+			continue
+		}
+		var chunk chatChunk
+		if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &chunk); err == nil {
+			for _, choice := range chunk.Choices {
+				if choice.Delta.Content != "" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 func TestHandleStreaming(t *testing.T) {
 	t.Parallel()
 
@@ -165,6 +188,9 @@ func TestHandleStreaming(t *testing.T) {
 		}
 		if !strings.Contains(body, `"role":"assistant"`) {
 			t.Errorf("expected role chunk in stream, got: %q", body)
+		}
+		if !hasAssistantContentDelta(body) {
+			t.Errorf("expected at least one chunk to carry non-empty assistant delta content, got: %q", body)
 		}
 		if !strings.HasSuffix(body, "data: [DONE]\n\n") {
 			t.Errorf("expected stream to end with 'data: [DONE]\\n\\n', got: %q", body)

@@ -11,7 +11,15 @@ import (
 	"time"
 )
 
-func TestParseFlags(t *testing.T) {
+type flagTestCase struct {
+	name    string
+	args    []string
+	wantOK  bool
+	wantCfg benchmarkConfig
+}
+
+func runParseFlagCase(t *testing.T, tt flagTestCase) {
+	t.Helper()
 	origCommandLine := flag.CommandLine
 	origArgs := os.Args
 	defer func() {
@@ -19,42 +27,27 @@ func TestParseFlags(t *testing.T) {
 		os.Args = origArgs
 	}()
 
-	tests := []struct {
-		name    string
-		args    []string
-		wantOK  bool
-		wantCfg benchmarkConfig
-	}{
-		{
-			name:   "missing model",
-			args:   []string{"bench", "-baseurl", "http://localhost:8080/v1"},
-			wantOK: false,
-		},
-		{
-			name:   "empty baseurl",
-			args:   []string{"bench", "-baseurl", "", "-model", "llama3"},
-			wantOK: false,
-		},
-		{
-			name:   "zero requests",
-			args:   []string{"bench", "-model", "llama3", "-requests", "0"},
-			wantOK: false,
-		},
-		{
-			name:   "negative requests",
-			args:   []string{"bench", "-model", "llama3", "-requests", "-5"},
-			wantOK: false,
-		},
-		{
-			name:   "zero par",
-			args:   []string{"bench", "-model", "llama3", "-par", "0"},
-			wantOK: false,
-		},
-		{
-			name:   "negative par",
-			args:   []string{"bench", "-model", "llama3", "-par", "-2"},
-			wantOK: false,
-		},
+	os.Args = tt.args
+	flag.CommandLine = flag.NewFlagSet(tt.args[0], flag.ContinueOnError)
+	flag.CommandLine.SetOutput(io.Discard)
+
+	cfg, ok := parseFlags()
+	if ok != tt.wantOK {
+		t.Errorf("%s: parseFlags() ok = %v, want %v", tt.name, ok, tt.wantOK)
+	}
+	if ok && cfg != tt.wantCfg {
+		t.Errorf("%s: parseFlags() cfg = %+v, want %+v", tt.name, cfg, tt.wantCfg)
+	}
+}
+
+func TestParseFlags(t *testing.T) {
+	tests := []flagTestCase{
+		{name: "missing model", args: []string{"bench", "-baseurl", "http://localhost:8080/v1"}, wantOK: false},
+		{name: "empty baseurl", args: []string{"bench", "-baseurl", "", "-model", "llama3"}, wantOK: false},
+		{name: "zero requests", args: []string{"bench", "-model", "llama3", "-requests", "0"}, wantOK: false},
+		{name: "negative requests", args: []string{"bench", "-model", "llama3", "-requests", "-5"}, wantOK: false},
+		{name: "zero par", args: []string{"bench", "-model", "llama3", "-par", "0"}, wantOK: false},
+		{name: "negative par", args: []string{"bench", "-model", "llama3", "-par", "-2"}, wantOK: false},
 		{
 			name:   "valid default baseurl and par",
 			args:   []string{"bench", "-model", "llama3"},
@@ -80,17 +73,7 @@ func TestParseFlags(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		os.Args = tt.args
-		flag.CommandLine = flag.NewFlagSet(tt.args[0], flag.ContinueOnError)
-		flag.CommandLine.SetOutput(io.Discard)
-
-		cfg, ok := parseFlags()
-		if ok != tt.wantOK {
-			t.Errorf("%s: parseFlags() ok = %v, want %v", tt.name, ok, tt.wantOK)
-		}
-		if ok && cfg != tt.wantCfg {
-			t.Errorf("%s: parseFlags() cfg = %+v, want %+v", tt.name, cfg, tt.wantCfg)
-		}
+		runParseFlagCase(t, tt)
 	}
 }
 
