@@ -289,7 +289,7 @@ func TestProcessCommand_StopReapsForkedGrandchild(t *testing.T) {
 	// Read the grandchild PID the wrapper recorded.
 	var childPID int
 	if !waitFor(2*time.Second, func() bool {
-		childPID = readPIDFile(pidFile)
+		childPID = readPIDFile(dir, filepath.Base(pidFile))
 		return childPID > 0
 	}) {
 		t.Fatalf("wrapper did not record grandchild PID")
@@ -414,10 +414,15 @@ func waitFor(timeout time.Duration, cond func() bool) bool {
 	return cond()
 }
 
-// readPIDFile returns the positive PID stored in path, or 0 when it is missing or malformed.
-func readPIDFile(path string) int {
-	data, err := os.ReadFile(path)
+// readPIDFile returns the positive PID stored in dir/name, or 0 when it is missing or malformed.
+// os.Root confines the read to dir.
+func readPIDFile(dir, name string) int {
+	root, err := os.OpenRoot(dir)
 	if err != nil {
+		return 0
+	}
+	data, err := root.ReadFile(name)
+	if closeErr := root.Close(); err != nil || closeErr != nil {
 		return 0
 	}
 	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
