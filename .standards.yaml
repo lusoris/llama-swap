@@ -29,7 +29,6 @@ register:
         format: json
         selector: invariants.*
 exceptions: []
-
 # Standard overrides only increase strictness. The explicit review mode below
 # permits single-maintainer operation; all other gates stay enforced.
 overrides:
@@ -42,6 +41,8 @@ overrides:
     # retains the minimum.
     review_mode: single_maintainer
     dismiss_stale_reviews: true
-
     # Declared at its live value; the forge default is the stricter one.
     require_extra_approval_for_unattributed_changes: true
+release:
+  e2e:
+    since: 076b11d586622c2ab5e427aa4e1480ddc9e8dd9d
