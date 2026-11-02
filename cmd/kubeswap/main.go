@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -73,7 +74,7 @@ func main() {
 	var err error
 	switch os.Args[1] {
 	case "serve":
-		err = serveCmd(os.Args[2:])
+		err = serveCmd(context.Background(), os.Args[2:])
 	case "start":
 		err = startCmd(os.Args[2:])
 	case "delete":

@@ -63,10 +63,15 @@ const maxCreateAttempts = 20
 // when the old object finally disappears.
 func waitForDeploymentGone(ctx context.Context, client kubernetes.Interface, namespace, name string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
-	for {
-		// Per-iteration bound: a hung Get must not stall the loop past
-		// its deadline.
-		callCtx, cancel := context.WithTimeout(ctx, apiCallTimeout)
+	for ctx.Err() == nil {
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out after %s waiting for deployment %s to finish deleting", timeout, name)
+		}
+		callTimeout := apiCallTimeout
+		if rem := time.Until(deadline); rem < callTimeout {
+			callTimeout = rem
+		}
+		callCtx, cancel := context.WithTimeout(ctx, callTimeout)
 		_, err := client.AppsV1().Deployments(namespace).Get(callCtx, name, metav1.GetOptions{})
 		cancel()
 		if apierrors.IsNotFound(err) {
@@ -78,8 +83,15 @@ func waitForDeploymentGone(ctx context.Context, client kubernetes.Interface, nam
 		if time.Now().After(deadline) {
 			return fmt.Errorf("timed out after %s waiting for deployment %s to finish deleting", timeout, name)
 		}
-		time.Sleep(500 * time.Millisecond)
+		t := time.NewTimer(500 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return fmt.Errorf("checking deployment %s: %w", name, ctx.Err())
+		case <-t.C:
+		}
 	}
+	return fmt.Errorf("checking deployment %s: %w", name, ctx.Err())
 }
 
 // verifyOwnership checks that obj was created by kubeswap for modelID.
@@ -104,51 +116,93 @@ func verifyOwnership(obj metav1.Object, modelID string) error {
 	return nil
 }
 
+// replaceDriftedDeployment deletes a drifted deployment and waits for its termination.
+func replaceDriftedDeployment(ctx context.Context, client kubernetes.Interface, cfg *serveConfig, depName string) error {
+	logf("deployment %s/%s exists but spec drifted; replacing (--strict)", cfg.Namespace, depName)
+	if err := client.AppsV1().Deployments(cfg.Namespace).Delete(ctx, depName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("deleting drifted deployment %s: %w", depName, err)
+	}
+	if err := waitForDeploymentGone(ctx, client, cfg.Namespace, depName, strictReplaceTimeout); err != nil {
+		return fmt.Errorf("replacing drifted deployment %s: %w", depName, err)
+	}
+	return nil
+}
+
+func ensureDeployment(ctx context.Context, client kubernetes.Interface, cfg *serveConfig) (bool, error) {
+	depName := cfg.DepName
+	dep, err := client.AppsV1().Deployments(cfg.Namespace).Get(ctx, depName, metav1.GetOptions{})
+	switch {
+	case err == nil:
+		if err := verifyOwnership(dep, cfg.Model); err != nil {
+			return false, fmt.Errorf("adopting deployment %s/%s: %w", cfg.Namespace, depName, err)
+		}
+		if !cfg.Strict {
+			return true, nil
+		}
+		want, err := cfg.renderDeployment()
+		if err != nil {
+			return false, err
+		}
+		if !deploymentSpecMatches(dep, want) {
+			if err := replaceDriftedDeployment(ctx, client, cfg, depName); err != nil {
+				return false, err
+			}
+			return false, nil
+		}
+		return true, nil
+	case apierrors.IsNotFound(err):
+		return false, nil
+	default:
+		return false, fmt.Errorf("getting deployment %s/%s: %w", cfg.Namespace, depName, err)
+	}
+}
+
+func ensureService(ctx context.Context, client kubernetes.Interface, cfg *serveConfig, adopted bool, res *ensureResult) error {
+	svcName := cfg.SvcName
+	svc, err := client.CoreV1().Services(cfg.Namespace).Get(ctx, svcName, metav1.GetOptions{})
+	switch {
+	case apierrors.IsNotFound(err):
+		if _, err := client.CoreV1().Services(cfg.Namespace).Create(ctx, cfg.renderService(), metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+			return fmt.Errorf("creating service %s: %w", svcName, err)
+		}
+		if !adopted {
+			res.Created = append(res.Created, "service/"+svcName)
+		}
+		return nil
+	case err == nil:
+		if err := verifyOwnership(svc, cfg.Model); err != nil {
+			return fmt.Errorf("adopting service %s/%s: %w", cfg.Namespace, svcName, err)
+		}
+		if want := cfg.renderService(); !serviceSpecMatches(svc, want) {
+			logf("service %s/%s exists but spec drifted (selector/ports); updating", cfg.Namespace, svcName)
+			svc.Spec.Selector = want.Spec.Selector
+			svc.Spec.Ports = want.Spec.Ports
+			if _, err := client.CoreV1().Services(cfg.Namespace).Update(ctx, svc, metav1.UpdateOptions{}); err != nil && !apierrors.IsNotFound(err) {
+				return fmt.Errorf("updating service %s: %w", svcName, err)
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("getting service %s: %w", svcName, err)
+	}
+}
+
 // ensureResources creates (or adopts) the model's PVCs, Deployment and
 // Service. Adopting an existing deployment keeps a backend alive across
 // head-end restarts; --strict replaces it when the container spec drifted.
 // Adoption and deletion only ever touch objects verified to belong to the
 // model (verifyOwnership), so colliding model IDs cannot adopt or tear
 // down each other's backends.
-func ensureResources(client kubernetes.Interface, cfg *serveConfig) (*ensureResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), ensureTimeout)
+func ensureResources(ctx context.Context, client kubernetes.Interface, cfg *serveConfig) (*ensureResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, ensureTimeout)
 	defer cancel()
 	res := &ensureResult{}
 
-	depName := cfg.DepName
-	dep, err := client.AppsV1().Deployments(cfg.Namespace).Get(ctx, depName, metav1.GetOptions{})
-	switch {
-	case err == nil:
-		if err := verifyOwnership(dep, cfg.Model); err != nil {
-			return nil, fmt.Errorf("adopting deployment %s/%s: %w", cfg.Namespace, depName, err)
-		}
-		res.Adopted = true
-		if cfg.Strict {
-			want, err := cfg.renderDeployment()
-			if err != nil {
-				return nil, err
-			}
-			if !deploymentSpecMatches(dep, want) {
-				log.Printf("deployment %s/%s exists but spec drifted; replacing (--strict)", cfg.Namespace, depName)
-				if err := client.AppsV1().Deployments(cfg.Namespace).Delete(ctx, depName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-					return nil, fmt.Errorf("deleting drifted deployment %s: %w", depName, err)
-				}
-				// Wait for the deletion to actually complete before creating
-				// the replacement: an immediate Create can return
-				// AlreadyExists while the old object is still terminating,
-				// and the name then vanishes with it (no replacement, serve
-				// shuts down on the next poll, the model never starts).
-				if err := waitForDeploymentGone(ctx, client, cfg.Namespace, depName, strictReplaceTimeout); err != nil {
-					return nil, fmt.Errorf("replacing drifted deployment %s: %w", depName, err)
-				}
-				res.Adopted = false
-			}
-		}
-	case apierrors.IsNotFound(err):
-		// fall through: create everything
-	default:
-		return nil, fmt.Errorf("getting deployment %s/%s: %w", cfg.Namespace, depName, err)
+	adopted, err := ensureDeployment(ctx, client, cfg)
+	if err != nil {
+		return nil, err
 	}
+	res.Adopted = adopted
 
 	if !res.Adopted {
 		created, err := createMissing(ctx, client, cfg)
@@ -158,39 +212,9 @@ func ensureResources(client kubernetes.Interface, cfg *serveConfig) (*ensureResu
 		res.Created = created
 	}
 
-	// A deployment can exist while its Service was deleted; recreate the
-	// Service so in-cluster consumers keep working.
-	svcName := cfg.SvcName
-	svc, err := client.CoreV1().Services(cfg.Namespace).Get(ctx, svcName, metav1.GetOptions{})
-	switch {
-	case apierrors.IsNotFound(err):
-		if _, err := client.CoreV1().Services(cfg.Namespace).Create(ctx, cfg.renderService(), metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
-			return nil, fmt.Errorf("creating service %s: %w", svcName, err)
-		}
-		if !res.Adopted {
-			res.Created = append(res.Created, "service/"+svcName)
-		}
-	case err == nil:
-		if err := verifyOwnership(svc, cfg.Model); err != nil {
-			return nil, fmt.Errorf("adopting service %s/%s: %w", cfg.Namespace, svcName, err)
-		}
-		// A changed --port or --service-port drifts the selector or ports
-		// away from renderService; adopt the desired spec in place. Update
-		// (not replace) keeps the Service identity — ClusterIP, UID and
-		// annotations — so in-cluster consumers that pin the address keep
-		// working.
-		if want := cfg.renderService(); !serviceSpecMatches(svc, want) {
-			log.Printf("service %s/%s exists but spec drifted (selector/ports); updating", cfg.Namespace, svcName)
-			svc.Spec.Selector = want.Spec.Selector
-			svc.Spec.Ports = want.Spec.Ports
-			if _, err := client.CoreV1().Services(cfg.Namespace).Update(ctx, svc, metav1.UpdateOptions{}); err != nil && !apierrors.IsNotFound(err) {
-				return nil, fmt.Errorf("updating service %s: %w", svcName, err)
-			}
-		}
-	default:
-		return nil, fmt.Errorf("getting service %s: %w", svcName, err)
+	if err := ensureService(ctx, client, cfg, res.Adopted, res); err != nil {
+		return nil, err
 	}
-
 	return res, nil
 }
 
@@ -206,73 +230,104 @@ func pvcAllowsReadWrite(pvc *corev1.PersistentVolumeClaim) bool {
 	return false
 }
 
-// createMissing creates the PVCs, Deployment and Service for cfg.
-// createMissing creates the PVCs, Deployment and Service for cfg under the
-// caller's bounded context: a stalled API must not pin serve before it
-// opens its listener, or keep a start from returning.
-func createMissing(ctx context.Context, client kubernetes.Interface, cfg *serveConfig) ([]string, error) {
+// warnHostPathVolumes logs a warning for each hostpath volume configured.
+func warnHostPathVolumes(cfg *serveConfig) {
 	for _, v := range cfg.Volumes {
 		if v.Kind == volHostPath {
-			log.Printf("WARNING: mounting host path %q at %q in the backend pod: hostpath volumes escape the namespace boundary, so the pod can read (and, without :ro, write) that part of the node", v.Name, v.Path)
+			logf("WARNING: mounting host path %q at %q in the backend pod: hostpath volumes escape the namespace boundary, so the pod can read (and, without :ro, write) that part of the node", v.Name, v.Path)
 		}
 	}
+}
+
+// ensurePVC ensures the volume claim exists, creating it when missing.
+func ensurePVC(ctx context.Context, client kubernetes.Interface, cfg *serveConfig, v volumeSpec) (created bool, err error) {
+	pvc, err := client.CoreV1().PersistentVolumeClaims(cfg.Namespace).Get(ctx, v.Name, metav1.GetOptions{})
+	switch {
+	case err == nil:
+		// Adopt the existing PVC as-is (it may be user-managed, e.g. a
+		// shared model cache); do not relabel it. But a read-only PVC
+		// cannot serve a read-write mount: the pod would sit in
+		// ContainerCreating with a cryptic volume error, so check now.
+		if !v.ReadOnly && !pvcAllowsReadWrite(pvc) {
+			return false, fmt.Errorf("PVC %s/%s is read-only (access modes %v) but the model mounts it read-write at %s; add :ro to the --volume or use a read-write PVC", cfg.Namespace, v.Name, pvc.Spec.AccessModes, v.Path)
+		}
+		return false, nil
+	case apierrors.IsNotFound(err):
+		pvc, err := cfg.renderPVC(v.Name)
+		if err != nil {
+			return false, err
+		}
+		if _, err := client.CoreV1().PersistentVolumeClaims(cfg.Namespace).Create(ctx, pvc, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+			return false, fmt.Errorf("creating PVC %s: %w", v.Name, err)
+		}
+		return true, nil
+	default:
+		return false, fmt.Errorf("getting PVC %s: %w", v.Name, err)
+	}
+}
+
+func createMissingPVCs(ctx context.Context, client kubernetes.Interface, cfg *serveConfig) ([]string, error) {
+	warnHostPathVolumes(cfg)
 	var created []string
 
 	for _, v := range cfg.Volumes {
 		if v.Kind != volPVC {
 			continue
 		}
-		pvc, err := client.CoreV1().PersistentVolumeClaims(cfg.Namespace).Get(ctx, v.Name, metav1.GetOptions{})
-		switch {
-		case err == nil:
-			// Adopt the existing PVC as-is (it may be user-managed, e.g. a
-			// shared model cache); do not relabel it. But a read-only PVC
-			// cannot serve a read-write mount: the pod would sit in
-			// ContainerCreating with a cryptic volume error, so check now.
-			if !v.ReadOnly && !pvcAllowsReadWrite(pvc) {
-				return nil, fmt.Errorf("PVC %s/%s is read-only (access modes %v) but the model mounts it read-write at %s; add :ro to the --volume or use a read-write PVC", cfg.Namespace, v.Name, pvc.Spec.AccessModes, v.Path)
-			}
-		case apierrors.IsNotFound(err):
-			pvc, err := cfg.renderPVC(v.Name)
-			if err != nil {
-				return nil, err
-			}
-			if _, err := client.CoreV1().PersistentVolumeClaims(cfg.Namespace).Create(ctx, pvc, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
-				return nil, fmt.Errorf("creating PVC %s: %w", v.Name, err)
-			}
-			created = append(created, "pvc/"+v.Name)
-		default:
-			return nil, fmt.Errorf("getting PVC %s: %w", v.Name, err)
+		pvcCreated, err := ensurePVC(ctx, client, cfg, v)
+		if err != nil {
+			return nil, err
 		}
+		if pvcCreated {
+			created = append(created, "pvc/"+v.Name)
+		}
+	}
+	return created, nil
+}
+
+func createDeploymentWithRetry(ctx context.Context, client kubernetes.Interface, cfg *serveConfig, dep *appsv1.Deployment) error {
+	// Retry while the name is still reserved by a deletion in progress;
+	// a persistent AlreadyExists means something else holds the name -
+	// fail loudly instead of assuming adoption.
+	for attempt := 1; attempt <= maxCreateAttempts; attempt++ {
+		_, err := client.AppsV1().Deployments(cfg.Namespace).Create(ctx, dep, metav1.CreateOptions{})
+		if err == nil {
+			return nil
+		}
+		if !apierrors.IsAlreadyExists(err) {
+			return fmt.Errorf("creating deployment %s: %w", dep.Name, err)
+		}
+		if attempt >= maxCreateAttempts {
+			break
+		}
+		// Interruptible: the bounded context must win over the retry
+		// wait, not just the API calls.
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("creating deployment %s: %w", dep.Name, ctx.Err())
+		case <-time.After(createRetryInterval):
+		}
+	}
+	return fmt.Errorf("creating deployment %s: name still reserved after %d attempts (a deletion may still be in progress)", dep.Name, maxCreateAttempts)
+}
+
+// createMissing creates the PVCs, Deployment and Service for cfg under the
+// caller's bounded context: a stalled API must not pin serve before it
+// opens its listener, or keep a start from returning.
+func createMissing(ctx context.Context, client kubernetes.Interface, cfg *serveConfig) ([]string, error) {
+	created, err := createMissingPVCs(ctx, client, cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	dep, err := cfg.renderDeployment()
 	if err != nil {
 		return nil, err
 	}
-	// Retry while the name is still reserved by a deletion in progress;
-	// a persistent AlreadyExists means something else holds the name -
-	// fail loudly instead of assuming adoption.
-	for attempt := 1; ; attempt++ {
-		_, err = client.AppsV1().Deployments(cfg.Namespace).Create(ctx, dep, metav1.CreateOptions{})
-		if err == nil {
-			created = append(created, "deployment/"+dep.Name)
-			break
-		}
-		if !apierrors.IsAlreadyExists(err) {
-			return nil, fmt.Errorf("creating deployment %s: %w", dep.Name, err)
-		}
-		if attempt >= maxCreateAttempts {
-			return nil, fmt.Errorf("creating deployment %s: name still reserved after %d attempts (a deletion may still be in progress)", dep.Name, attempt)
-		}
-		// Interruptible: the bounded context must win over the retry
-		// wait, not just the API calls.
-		select {
-		case <-ctx.Done():
-			return nil, fmt.Errorf("creating deployment %s: %w", dep.Name, ctx.Err())
-		case <-time.After(createRetryInterval):
-		}
+	if err := createDeploymentWithRetry(ctx, client, cfg, dep); err != nil {
+		return nil, err
 	}
+	created = append(created, "deployment/"+dep.Name)
 
 	svc := cfg.renderService()
 	if _, err := client.CoreV1().Services(cfg.Namespace).Create(ctx, svc, metav1.CreateOptions{}); err != nil {
@@ -306,10 +361,11 @@ type server struct {
 	logDone    chan struct{} // closed when the current log-stream goroutine exits
 	logsFailed bool
 
-	srv     *http.Server
-	stopCh  chan struct{}
-	stopMu  sync.Once
-	crashCh chan int // exit code to end the wrapper with when the backend fails
+	srv       *http.Server
+	stopCh    chan struct{}
+	stopMu    sync.Once
+	crashCh   chan int // exit code to end the wrapper with when the backend fails
+	logWriter io.Writer
 }
 
 // serveFlags holds the parsed `serve` flags.
@@ -347,47 +403,22 @@ type serveFlags struct {
 	proxyResponseTimeout time.Duration
 }
 
-// toConfig Builds the fully parsed serveConfig from the serve flags, validating every field.
-func (f *serveFlags) toConfig() (*serveConfig, error) {
-	sanitized, err := sanitizeModelID(f.model)
-	if err != nil {
-		return nil, err
-	}
-	depName, err := deploymentName(f.model)
-	if err != nil {
-		return nil, err
-	}
-	svcName, err := serviceName(f.model)
-	if err != nil {
-		return nil, err
-	}
-	envs, err := parseEnvVars(f.envs)
-	if err != nil {
-		return nil, err
-	}
-	gpus, err := parseGPUs(f.gpus)
-	if err != nil {
-		return nil, err
-	}
-	claims, err := parseResourceClaims(f.resourceClaims)
-	if err != nil {
-		return nil, err
-	}
+func (f *serveFlags) parseSchedulingAndStorage() (map[string]string, []toleration, []volumeSpec, map[string]string, error) {
 	nodeSel, err := parseKeyValues([]string(f.nodeSel), "node-selector")
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, nil, err
 	}
 	tols, err := parseTolerations(f.tols)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, nil, err
 	}
 	volumes, err := parseVolumes(f.volumes)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, nil, err
 	}
 	extra, err := parseKeyValues([]string(f.extraLbls), "label")
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, nil, err
 	}
 	// The managed labels (ownership, model ID, deployment name, app name)
 	// are set by kubeswap on every object and drive ownership checks and
@@ -395,25 +426,99 @@ func (f *serveFlags) toConfig() (*serveConfig, error) {
 	// in renderDeployment. Reject them here, before they are stored.
 	for k := range extra {
 		if k == labelManagedBy || k == labelModel || k == labelDeployment || k == labelAppName {
-			return nil, fmt.Errorf("--label %q is reserved (managed by kubeswap); choose another key", k)
+			return nil, nil, nil, nil, fmt.Errorf("--label %q is reserved (managed by kubeswap); choose another key", k)
 		}
 	}
+	return nodeSel, tols, volumes, extra, nil
+}
+
+func (f *serveFlags) parseResourcesAndPorts() (map[string]string, map[string]string, []servicePortSpec, error) {
 	requests, err := parseResources(f.requests, "request")
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	limits, err := parseResources(f.limits, "limit")
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	servicePorts, err := parseServicePorts(f.servicePorts)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	for _, sp := range servicePorts {
 		if sp.Name == "http" || sp.Port == int32(f.port) {
-			return nil, fmt.Errorf("--service-port %s:%d collides with the primary http port (%d)", sp.Name, sp.Port, f.port)
+			return nil, nil, nil, fmt.Errorf("--service-port %s:%d collides with the primary http port (%d)", sp.Name, sp.Port, f.port)
 		}
+	}
+	return requests, limits, servicePorts, nil
+}
+
+func (f *serveFlags) probeSettings() (livenessPath, checkPath string, probeTimeout, startupTimeout int64) {
+	livenessPath = f.livenessPath
+	if livenessPath == "" {
+		livenessPath = f.healthPath
+	}
+	checkPath = f.checkPath
+	if checkPath == "" {
+		checkPath = "/health"
+	}
+	probeTimeout = int64(f.probeTimeout / time.Second)
+	if probeTimeout < 1 {
+		probeTimeout = 1
+	}
+	startupTimeout = int64(f.startupTimeout / time.Second)
+	return
+}
+
+func parseModelNaming(model string) (string, string, string, error) {
+	sanitized, err := sanitizeModelID(model)
+	if err != nil {
+		return "", "", "", err
+	}
+	depName, err := deploymentName(model)
+	if err != nil {
+		return "", "", "", err
+	}
+	svcName, err := serviceName(model)
+	if err != nil {
+		return "", "", "", err
+	}
+	return sanitized, depName, svcName, nil
+}
+
+func (f *serveFlags) parseComputeSpecs() ([]envVar, map[string]string, []resourceClaimSpec, error) {
+	envs, err := parseEnvVars(f.envs)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	gpus, err := parseGPUs(f.gpus)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	claims, err := parseResourceClaims(f.resourceClaims)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return envs, gpus, claims, nil
+}
+
+// toConfig Builds the fully parsed serveConfig from the serve flags, validating every field.
+func (f *serveFlags) toConfig() (*serveConfig, error) {
+	sanitized, depName, svcName, err := parseModelNaming(f.model)
+	if err != nil {
+		return nil, err
+	}
+	envs, gpus, claims, err := f.parseComputeSpecs()
+	if err != nil {
+		return nil, err
+	}
+	nodeSel, tols, volumes, extra, err := f.parseSchedulingAndStorage()
+	if err != nil {
+		return nil, err
+	}
+	requests, limits, servicePorts, err := f.parseResourcesAndPorts()
+	if err != nil {
+		return nil, err
 	}
 	if f.grace < 0 {
 		return nil, fmt.Errorf("invalid --grace %s (must be zero or positive)", f.grace)
@@ -421,18 +526,7 @@ func (f *serveFlags) toConfig() (*serveConfig, error) {
 	if f.proxyResponseTimeout < 0 {
 		return nil, fmt.Errorf("invalid --proxy-response-timeout %s (must be zero or positive)", f.proxyResponseTimeout)
 	}
-	livenessPath := f.livenessPath
-	if livenessPath == "" {
-		livenessPath = f.healthPath
-	}
-	checkPath := f.checkPath
-	if checkPath == "" {
-		checkPath = "/health"
-	}
-	probeTimeout := int64(f.probeTimeout / time.Second)
-	if probeTimeout < 1 {
-		probeTimeout = 1
-	}
+	livenessPath, checkPath, probeTimeout, startupTimeout := f.probeSettings()
 	return &serveConfig{
 		Model:          f.model,
 		Sanitized:      sanitized,
@@ -446,7 +540,7 @@ func (f *serveFlags) toConfig() (*serveConfig, error) {
 		CheckPath:      checkPath,
 		LivenessPath:   livenessPath,
 		ProbeTimeout:   probeTimeout,
-		StartupTimeout: int64(f.startupTimeout / time.Second),
+		StartupTimeout: startupTimeout,
 		Command:        []string(f.command),
 		Requests:       requests,
 		Limits:         limits,
@@ -516,8 +610,7 @@ func (f *serveFlags) validateServeFlags() error {
 	return nil
 }
 
-// serveCmd Runs the serve subcommand: ensures the backend resources exist, then proxies the listen address to the backend pod until the model is unloaded.
-func serveCmd(args []string) error {
+func parseServeFlags(args []string) (*serveFlags, *flag.FlagSet, error) {
 	var f serveFlags
 	fs := newFlagSet("serve")
 	fs.StringVar(&f.listen, "listen", "", "address to listen on (required, e.g. 127.0.0.1:${PORT})")
@@ -527,45 +620,20 @@ func serveCmd(args []string) error {
 	fs.DurationVar(&f.poll, "poll", time.Second, "interval for cluster state polling")
 	fs.DurationVar(&f.proxyResponseTimeout, "proxy-response-timeout", 300*time.Second, "bound on how long a READY backend may take before sending response headers; CPU image generation can need several minutes per image (0 disables the bound)")
 	fs.BoolVar(&f.noLogs, "no-logs", false, "disable pod log forwarding to stderr")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		return nil, nil, err
+	}
 
 	if f.listen == "" {
-		return errors.New("--listen is required")
+		return nil, nil, errors.New("--listen is required")
 	}
 	if err := f.validateServeFlags(); err != nil {
-		return err
+		return nil, nil, err
 	}
+	return &f, fs, nil
+}
 
-	cfg, err := f.toConfig()
-	if err != nil {
-		return err
-	}
-	cfg.Args = fs.Args()
-
-	client, err := buildClient(f.kubeconfig)
-	if err != nil {
-		return err
-	}
-
-	res, err := ensureResources(client, cfg)
-	if err != nil {
-		return err
-	}
-	if res.Adopted {
-		log.Printf("adopting existing deployment %s/%s", cfg.Namespace, cfg.DepName)
-	} else {
-		log.Printf("created %v", res.Created)
-	}
-
-	s := newServer(cfg, client, f.upstream, f.noLogs, f.poll, f.proxyResponseTimeout)
-
-	ln, err := net.Listen("tcp", f.listen)
-	if err != nil {
-		return fmt.Errorf("listening on %s: %w", f.listen, err)
-	}
-	log.Printf("kubeswap serve: model=%s namespace=%s upstream=%s listening on %s",
-		cfg.Model, cfg.Namespace, s.upstreamDescription(), f.listen)
-
+func (s *server) runUntilShutdown(ctx context.Context, ln net.Listener) error {
 	errCh := make(chan error, 1)
 	go func() {
 		if err := s.srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -573,9 +641,10 @@ func serveCmd(args []string) error {
 		}
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	// pollLoop streams cluster state until shutdown; each request is bounded by apiCallTimeout.
+	pollCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	go s.pollLoop(ctx)
+	go s.pollLoop(pollCtx)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
@@ -584,6 +653,8 @@ func serveCmd(args []string) error {
 	var crashCode int
 	crashed := false
 	select {
+	case <-ctx.Done():
+		shutdownReason = "context canceled; shutting down"
 	case sig := <-sigCh:
 		shutdownReason = fmt.Sprintf("received %s; shutting down (deployment kept for adoption)", sig)
 	case <-s.stopCh:
@@ -609,6 +680,46 @@ func serveCmd(args []string) error {
 		return &exitError{code: crashCode, msg: shutdownReason}
 	}
 	return nil
+}
+
+// serveCmd Runs the serve subcommand: ensures the backend resources exist, then proxies the listen address to the backend pod until the model is unloaded.
+func serveCmd(ctx context.Context, args []string) error {
+	f, fs, err := parseServeFlags(args)
+	if err != nil {
+		return err
+	}
+
+	cfg, err := f.toConfig()
+	if err != nil {
+		return err
+	}
+	cfg.Args = fs.Args()
+
+	client, err := buildClient(f.kubeconfig)
+	if err != nil {
+		return err
+	}
+
+	res, err := ensureResources(ctx, client, cfg)
+	if err != nil {
+		return err
+	}
+	if res.Adopted {
+		logf("adopting existing deployment %s/%s", cfg.Namespace, cfg.DepName)
+	} else {
+		logf("created %v", res.Created)
+	}
+
+	s := newServer(cfg, client, f.upstream, f.noLogs, f.poll, f.proxyResponseTimeout)
+
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", f.listen)
+	if err != nil {
+		return fmt.Errorf("listening on %s: %w", f.listen, err)
+	}
+	logf("kubeswap serve: model=%s namespace=%s upstream=%s listening on %s",
+		cfg.Model, cfg.Namespace, s.upstreamDescription(), f.listen)
+
+	return s.runUntilShutdown(ctx, ln)
 }
 
 // exitError is an error that carries a process exit code: main exits with
@@ -646,7 +757,7 @@ func startModel(client kubernetes.Interface, f *serveFlags, fs *flag.FlagSet) er
 		return err
 	}
 	cfg.Args = fs.Args()
-	res, err := ensureResources(client, cfg)
+	res, err := ensureResources(context.Background(), client, cfg)
 	if err != nil {
 		return err
 	}
@@ -659,23 +770,30 @@ func startModel(client kubernetes.Interface, f *serveFlags, fs *flag.FlagSet) er
 	return nil
 }
 
-// newServer wires up the reverse proxy and HTTP server. The upstream is
-// dynamic (discovered pod IP) unless an override was given.
-func newServer(cfg *serveConfig, client kubernetes.Interface, upstreamOverride string, noLogs bool, poll, proxyResponseTimeout time.Duration) *server {
-	s := &server{
-		cfg:                  cfg,
-		client:               client,
-		upstreamOverride:     strings.TrimRight(upstreamOverride, "/"),
-		noLogs:               noLogs,
-		poll:                 poll,
-		proxyResponseTimeout: proxyResponseTimeout,
-		stopCh:               make(chan struct{}),
-		crashCh:              make(chan int, 1),
+func proxyTransport(responseHeaderTimeout time.Duration) *http.Transport {
+	return &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout: 10 * time.Second,
+		// Bounds a wedged backend, not model loading: llama-swap
+		// only forwards once the check path reports the pod ready
+		// (startup probe passed), so this caps how long a ready
+		// backend may stall before producing response headers.
+		// Overridable per model (--proxy-response-timeout) because
+		// CPU image generation legitimately needs more than the
+		// default 300s for a single image.
+		ResponseHeaderTimeout: responseHeaderTimeout,
+		ExpectContinueTimeout: 1 * time.Second,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   10,
+		IdleConnTimeout:       90 * time.Second,
 	}
-	s.readyReason.Store("starting")
-	s.upstream.Store("")
+}
 
-	proxy := &httputil.ReverseProxy{
+func buildReverseProxy(s *server) *httputil.ReverseProxy {
+	return &httputil.ReverseProxy{
 		Director: func(r *http.Request) {
 			u, err := url.Parse(s.upstream.Load().(string))
 			if err != nil {
@@ -693,25 +811,7 @@ func newServer(cfg *serveConfig, client kubernetes.Interface, upstreamOverride s
 		// container may carry HTTP_PROXY for other purposes, and
 		// ProxyFromEnvironment would send in-cluster traffic through
 		// it).
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
-			TLSHandshakeTimeout: 10 * time.Second,
-			// Bounds a wedged backend, not model loading: llama-swap
-			// only forwards once the check path reports the pod ready
-			// (startup probe passed), so this caps how long a ready
-			// backend may stall before producing response headers.
-			// Overridable per model (--proxy-response-timeout) because
-			// CPU image generation legitimately needs more than the
-			// default 300s for a single image.
-			ResponseHeaderTimeout: s.proxyResponseTimeout,
-			ExpectContinueTimeout: 1 * time.Second,
-			MaxIdleConns:          100,
-			MaxIdleConnsPerHost:   10,
-			IdleConnTimeout:       90 * time.Second,
-		},
+		Transport:     proxyTransport(s.proxyResponseTimeout),
 		FlushInterval: -1, // stream responses (SSE) without buffering
 		// Upstream CORS headers are deliberately left in place: kubeswap has no
 		// CORS middleware of its own, so stripping them would leave browsers
@@ -733,7 +833,24 @@ func newServer(cfg *serveConfig, client kubernetes.Interface, upstreamOverride s
 			}
 		},
 	}
-	s.proxy = proxy
+}
+
+// newServer wires up the reverse proxy and HTTP server. The upstream is
+// dynamic (discovered pod IP) unless an override was given.
+func newServer(cfg *serveConfig, client kubernetes.Interface, upstreamOverride string, noLogs bool, poll, proxyResponseTimeout time.Duration) *server {
+	s := &server{
+		cfg:                  cfg,
+		client:               client,
+		upstreamOverride:     strings.TrimRight(upstreamOverride, "/"),
+		noLogs:               noLogs,
+		poll:                 poll,
+		proxyResponseTimeout: proxyResponseTimeout,
+		stopCh:               make(chan struct{}),
+		crashCh:              make(chan int, 1),
+	}
+	s.readyReason.Store("starting")
+	s.upstream.Store("")
+	s.proxy = buildReverseProxy(s)
 
 	if s.upstreamOverride != "" {
 		s.upstream.Store(s.upstreamOverride)
@@ -818,7 +935,7 @@ func (s *server) pollLoop(ctx context.Context) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	s.pollOnce(ctx)
-	for {
+	for ctx.Err() == nil {
 		select {
 		case <-ctx.Done():
 			return
@@ -837,9 +954,9 @@ func (s *server) requestStop() {
 func (s *server) setReady(ready bool, reason string) {
 	if ready != s.ready.Load() || reason != s.readyReason.Load().(string) {
 		if ready {
-			log.Printf("backend ready (%s)", reason)
+			logf("backend ready (%s)", reason)
 		} else if !s.ready.Load() {
-			log.Printf("backend not ready: %s", reason)
+			logf("backend not ready: %s", reason)
 		}
 		s.ready.Store(ready)
 		s.readyReason.Store(reason)
@@ -859,7 +976,7 @@ func (s *server) pollOnce(ctx context.Context) {
 	dep, err := s.client.AppsV1().Deployments(cfg.Namespace).Get(apiCtx, depName, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Printf("deployment %s/%s deleted, shutting down", cfg.Namespace, depName)
+			logf("deployment %s/%s deleted, shutting down", cfg.Namespace, depName)
 			s.setReady(false, "deployment deleted")
 			s.requestStop()
 		} else {
@@ -984,7 +1101,7 @@ func podCrashState(p *corev1.Pod) (code int, desc string, failed bool) {
 // A crashed backend needs intervention, not time - waiting out
 // llama-swap's health-check timeout would only delay the same error.
 func (s *server) fail(code int, desc string) {
-	log.Printf("model %q: backend failing (%s); cleaning up and exiting with code %d", s.cfg.Model, desc, code)
+	logf("model %q: backend failing (%s); cleaning up and exiting with code %d", s.cfg.Model, desc, code)
 	s.setReady(false, "backend failing: "+desc)
 
 	// Flush the pod log stream so the crash output is visible; bound the
@@ -1020,14 +1137,14 @@ func (s *server) cleanupOwned() {
 	case apierrors.IsNotFound(err):
 		// already gone
 	case err != nil:
-		log.Printf("cleanup: getting deployment %s: %v", cfg.DepName, err)
+		logf("cleanup: getting deployment %s: %v", cfg.DepName, err)
 	default:
 		if err := verifyOwnership(dep, cfg.Model); err != nil {
-			log.Printf("cleanup: keeping deployment %s: %v", cfg.DepName, err)
+			logf("cleanup: keeping deployment %s: %v", cfg.DepName, err)
 		} else if err := s.client.AppsV1().Deployments(cfg.Namespace).Delete(ctx, cfg.DepName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-			log.Printf("cleanup: deleting deployment %s: %v", cfg.DepName, err)
+			logf("cleanup: deleting deployment %s: %v", cfg.DepName, err)
 		} else {
-			log.Printf("cleanup: deleted deployment %s/%s", cfg.Namespace, cfg.DepName)
+			logf("cleanup: deleted deployment %s/%s", cfg.Namespace, cfg.DepName)
 		}
 	}
 
@@ -1036,14 +1153,14 @@ func (s *server) cleanupOwned() {
 	case apierrors.IsNotFound(err):
 		// no service to delete
 	case err != nil:
-		log.Printf("cleanup: getting service %s: %v", cfg.SvcName, err)
+		logf("cleanup: getting service %s: %v", cfg.SvcName, err)
 	default:
 		if err := verifyOwnership(svc, cfg.Model); err != nil {
-			log.Printf("cleanup: keeping service %s: %v", cfg.SvcName, err)
+			logf("cleanup: keeping service %s: %v", cfg.SvcName, err)
 		} else if err := s.client.CoreV1().Services(cfg.Namespace).Delete(ctx, cfg.SvcName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-			log.Printf("cleanup: deleting service %s: %v", cfg.SvcName, err)
+			logf("cleanup: deleting service %s: %v", cfg.SvcName, err)
 		} else {
-			log.Printf("cleanup: deleted service %s/%s", cfg.Namespace, cfg.SvcName)
+			logf("cleanup: deleted service %s/%s", cfg.Namespace, cfg.SvcName)
 		}
 	}
 }
@@ -1130,40 +1247,57 @@ func (s *server) stopLogsLocked() {
 	s.logUID = ""
 }
 
-// streamLogs Follows the backend pod logs and forwards them to stderr until the pod or the wrapper goes away.
-func (s *server) streamLogs(ctx context.Context, pod *corev1.Pod) {
-	stream, err := s.client.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
-		Container: containerName,
-		Follow:    true,
-	}).Stream(ctx)
-	if err != nil {
-		perm := strings.Contains(strings.ToLower(err.Error()), "forbidden")
-		s.mu.Lock()
-		perm = perm || s.logsFailed
-		s.logsFailed = perm
-		s.mu.Unlock()
-		if perm {
-			log.Printf("log forwarding disabled: %v", err)
-			return
+func (s *server) readLogStream(ctx context.Context, stream io.ReadCloser, podName string) {
+	defer func() {
+		if err := stream.Close(); err != nil {
+			log.Printf("closing log stream for pod %s: %v", podName, err)
 		}
-		// Transient failure (container still creating/restarting): retry
-		// after a short delay until the stream context is canceled (pod
-		// change or shutdown).
-		select {
-		case <-time.After(15 * time.Second):
-		case <-ctx.Done():
-		}
-		if ctx.Err() == nil {
-			s.streamLogs(ctx, pod)
-		}
-		return
+	}()
+	var out io.Writer = os.Stderr
+	if s != nil && s.logWriter != nil {
+		out = s.logWriter
 	}
 	scanner := bufio.NewScanner(stream)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
-		fmt.Fprintf(os.Stderr, "[pod/%s] %s\n", pod.Name, scanner.Text())
+		line := strings.ReplaceAll(strings.ReplaceAll(scanner.Text(), "\n", `\n`), "\r", `\r`)
+		if _, err := fmt.Fprintf(out, "[pod/%s] %s\n", podName, line); err != nil {
+			break
+		}
 	}
-	// The scanner has consumed the stream to EOF; close releases the
-	// transport connection.
-	_ = stream.Close()
+	if err := scanner.Err(); err != nil && ctx.Err() == nil {
+		logf("reading log stream for pod %s: %v", podName, err)
+	}
+}
+
+// streamLogs Follows the backend pod logs and forwards them to stderr until the pod or the wrapper goes away.
+func (s *server) streamLogs(ctx context.Context, pod *corev1.Pod) {
+	for ctx.Err() == nil {
+		stream, err := s.client.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
+			Container: containerName,
+			Follow:    true,
+		}).Stream(ctx)
+		if err != nil {
+			perm := strings.Contains(strings.ToLower(err.Error()), "forbidden")
+			s.mu.Lock()
+			perm = perm || s.logsFailed
+			s.logsFailed = perm
+			s.mu.Unlock()
+			if perm {
+				log.Printf("log forwarding disabled: %v", err)
+				return
+			}
+			// Transient failure (container still creating/restarting): retry
+			// after a short delay until the stream context is canceled (pod
+			// change or shutdown).
+			select {
+			case <-time.After(15 * time.Second):
+			case <-ctx.Done():
+				return
+			}
+			continue
+		}
+		s.readLogStream(ctx, stream, pod.Name)
+		return
+	}
 }

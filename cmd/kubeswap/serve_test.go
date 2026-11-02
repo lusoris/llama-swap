@@ -114,7 +114,7 @@ func TestKubeswap_ToConfigResourceClaims(t *testing.T) {
 
 // TestKubeswap_ServeRejectsNegativeGrace Verifies a negative --grace is rejected at parse time.
 func TestKubeswap_ServeRejectsNegativeGrace(t *testing.T) {
-	err := serveCmd([]string{
+	err := serveCmd(context.Background(), []string{
 		"--listen", "127.0.0.1:0", "--model", "m", "--image", "img",
 		"--grace", "-5s",
 	})
@@ -127,7 +127,7 @@ func TestKubeswap_ServeRejectsNegativeGrace(t *testing.T) {
 // --proxy-response-timeout is rejected at parse time (zero is valid: no
 // bound, for slow CPU image generation).
 func TestKubeswap_ServeRejectsNegativeProxyResponseTimeout(t *testing.T) {
-	err := serveCmd([]string{
+	err := serveCmd(context.Background(), []string{
 		"--listen", "127.0.0.1:0", "--model", "m", "--image", "img",
 		"--proxy-response-timeout", "-5s",
 	})
@@ -139,7 +139,7 @@ func TestKubeswap_ServeRejectsNegativeProxyResponseTimeout(t *testing.T) {
 // TestKubeswap_ServeRejectsOutOfRangePort Verifies out-of-range --port values are rejected.
 func TestKubeswap_ServeRejectsOutOfRangePort(t *testing.T) {
 	for _, port := range []string{"0", "-1", "65536"} {
-		err := serveCmd([]string{
+		err := serveCmd(context.Background(), []string{
 			"--listen", "127.0.0.1:0", "--model", "m", "--image", "img",
 			"--port", port,
 		})
@@ -404,7 +404,7 @@ func crashedPod(cfg *serveConfig, state corev1.ContainerState) *corev1.Pod {
 func TestKubeswap_BackendCrashFailsWrapper(t *testing.T) {
 	cfg := testConfig()
 	client := newFakeClient()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatalf("ensureResources: %v", err)
 	}
 	state := corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137, Reason: "OOMKilled"}}
@@ -443,7 +443,7 @@ func TestKubeswap_BackendCrashFailsWrapper(t *testing.T) {
 func TestKubeswap_BackendCrashCrashLoop(t *testing.T) {
 	cfg := testConfig()
 	client := newFakeClient()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatalf("ensureResources: %v", err)
 	}
 	state := corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}
@@ -501,7 +501,7 @@ func TestKubeswap_BackendCrashKeepsForeignObjects(t *testing.T) {
 func TestKubeswap_BackendCrashLosesToShutdown(t *testing.T) {
 	cfg := testConfig()
 	client := newFakeClient()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatalf("ensureResources: %v", err)
 	}
 	state := corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137, Reason: "OOMKilled"}}
