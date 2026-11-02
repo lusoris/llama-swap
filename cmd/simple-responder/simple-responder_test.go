@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -121,6 +122,135 @@ func streamHasDeltaContent(body, want string) bool {
 		}
 	}
 	return false
+}
+
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) {
+	return 0, errors.New("read error")
+}
+
+func (errReader) Close() error {
+	return nil
+}
+
+type errCloseReader struct {
+	*strings.Reader
+}
+
+func (errCloseReader) Close() error {
+	return errors.New("close error")
+}
+
+func TestSetupRouter_SDAPI_ImageRoutes(t *testing.T) {
+	expectedModel := "TheExpectedModel"
+	responseMsg := "hello"
+	r := setupRouter(&expectedModel, &responseMsg)
+
+	tests := []struct {
+		name  string
+		route string
+	}{
+		{name: "txt2img", route: "/sdapi/v1/txt2img"},
+		{name: "img2img", route: "/sdapi/v1/img2img"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload := `{"model":"sd-test"}`
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, tt.route, strings.NewReader(payload))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+			}
+
+			var resp struct {
+				Model  string   `json:"model"`
+				Images []string `json:"images"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("unmarshal error: %v", err)
+			}
+			if resp.Model != "sd-test" {
+				t.Errorf("expected model 'sd-test', got %q", resp.Model)
+			}
+			if resp.Images == nil || len(resp.Images) != 0 {
+				t.Errorf("expected empty images array, got %v", resp.Images)
+			}
+		})
+	}
+}
+
+func TestSetupRouter_SDAPI_ImageRoutes_ReadError(t *testing.T) {
+	expectedModel := "TheExpectedModel"
+	responseMsg := "hello"
+	r := setupRouter(&expectedModel, &responseMsg)
+
+	tests := []struct {
+		name  string
+		route string
+	}{
+		{name: "txt2img", route: "/sdapi/v1/txt2img"},
+		{name: "img2img", route: "/sdapi/v1/img2img"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, tt.route, errReader{})
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusInternalServerError {
+				t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, rec.Code)
+			}
+
+			var resp map[string]string
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("unmarshal error: %v", err)
+			}
+			if resp["error"] != "Failed to read request body" {
+				t.Errorf("expected error 'Failed to read request body', got %q", resp["error"])
+			}
+		})
+	}
+}
+
+func TestSetupRouter_AudioSpeech_CloseError(t *testing.T) {
+	expectedModel := "TheExpectedModel"
+	responseMsg := "hello"
+	r := setupRouter(&expectedModel, &responseMsg)
+
+	var logBuf bytes.Buffer
+	origLog := log.Writer()
+	log.SetOutput(&logBuf)
+	defer log.SetOutput(origLog)
+
+	payload := `{"model":"TheExpectedModel"}`
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/audio/speech", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Body = &errCloseReader{Reader: strings.NewReader(payload)}
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+	if resp["message"] != "ok" {
+		t.Errorf("expected message 'ok', got %q", resp["message"])
+	}
+	if !strings.Contains(logBuf.String(), "close request body error") {
+		t.Errorf("expected close error in log, got: %q", logBuf.String())
+	}
 }
 
 func TestWaitForShutdown_SigTerm(t *testing.T) {
