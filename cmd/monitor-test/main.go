@@ -5,7 +5,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/mostlygeek/llama-swap/internal/config"
@@ -56,7 +59,10 @@ func main() {
 	}
 	printSysStat(s)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	ctx, cancel := context.WithTimeout(sigCtx, 5*time.Second)
 	defer cancel()
 
 	gpuCh, err := perf.GetGpuStats(ctx, every, l)
@@ -70,23 +76,44 @@ func main() {
 		case g := <-gpuCh:
 			printGpuStats(g)
 		case <-ctx.Done():
+			if sigCtx.Err() != nil {
+				return
+			}
 			fmt.Println("GPU: timed out waiting for stats")
 		}
 	}
 
 	if *stream {
-		m, _ := perf.New(config.PerformanceConfig{Every: every}, l)
-		m.Start()
-		defer m.Stop()
-		sysCh, gpuCh, unsub := m.Subscribe()
-		defer unsub()
-		for {
-			select {
-			case s := <-sysCh:
-				printSysStat(s)
-			case g := <-gpuCh:
-				printGpuStats(g)
+		streamStats(sigCtx, every, l)
+	}
+}
+
+func streamStats(ctx context.Context, every time.Duration, l *logmon.Monitor) {
+	m, err := perf.New(config.PerformanceConfig{Every: every}, l)
+	if err != nil {
+		fmt.Println("Perf Init Error:", err)
+		return
+	}
+	m.Start()
+	defer m.Stop()
+	sysCh, gpuCh, unsub := m.Subscribe()
+	defer unsub()
+	for ctx.Err() == nil && (sysCh != nil || gpuCh != nil) {
+		select {
+		case <-ctx.Done():
+			return
+		case s, ok := <-sysCh:
+			if !ok {
+				sysCh = nil
+				continue
 			}
+			printSysStat(s)
+		case g, ok := <-gpuCh:
+			if !ok {
+				gpuCh = nil
+				continue
+			}
+			printGpuStats(g)
 		}
 	}
 }
