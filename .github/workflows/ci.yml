@@ -104,7 +104,7 @@ jobs:
           github.event.pull_request.draft != true &&
           steps.manifest.outputs.present == 'true'
         env:
-          PRAETOR_REF: 784c42f5aff539806619ae8858afcc468f1e3e3a
+          PRAETOR_REF: 3af1b0452ea36c45144458b88e599993fb9dcdd9
         run: |
           set -euo pipefail
           go install "github.com/cordanaLLM/praetor/cmd/standardsctl@${PRAETOR_REF}"
