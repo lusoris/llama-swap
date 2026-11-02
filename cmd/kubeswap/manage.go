@@ -152,23 +152,35 @@ func deleteModelPVCs(ctx context.Context, client kubernetes.Interface, namespace
 func waitForPodsGone(ctx context.Context, client kubernetes.Interface, namespace, sanitized, depName string, timeout time.Duration) error {
 	selector := labels.Set(podSelectorLabels(sanitized, depName)).String()
 	deadline := time.Now().Add(timeout)
+	var count int
 	for ctx.Err() == nil {
-		// Per-iteration bound: a hung List must not stall the loop past
-		// its deadline.
-		callCtx, cancel := context.WithTimeout(ctx, apiCallTimeout)
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out after %s waiting for %d pods to terminate", timeout, count)
+		}
+		callTimeout := apiCallTimeout
+		if rem := time.Until(deadline); rem < callTimeout {
+			callTimeout = rem
+		}
+		callCtx, cancel := context.WithTimeout(ctx, callTimeout)
 		pods, err := client.CoreV1().Pods(namespace).List(callCtx, metav1.ListOptions{LabelSelector: selector})
 		cancel()
 		if err != nil {
 			return fmt.Errorf("listing pods: %w", err)
 		}
-		count := len(pods.Items)
+		count = len(pods.Items)
 		if count == 0 {
 			return nil
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("timed out after %s waiting for %d pods to terminate", timeout, count)
 		}
-		time.Sleep(500 * time.Millisecond)
+		t := time.NewTimer(500 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return fmt.Errorf("listing pods: %w", ctx.Err())
+		case <-t.C:
+		}
 	}
 	return fmt.Errorf("listing pods: %w", ctx.Err())
 }

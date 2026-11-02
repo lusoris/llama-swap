@@ -27,7 +27,7 @@ func newFakeClient() *fake.Clientset { return fake.NewClientset() }
 
 // makeDep Creates the config's backend resources against the fake client via ensureResources.
 func makeDep(cfg *serveConfig, client *fake.Clientset) (*serveConfig, error) {
-	_, err := ensureResources(client, cfg)
+	_, err := ensureResources(context.Background(), client, cfg)
 	return cfg, err
 }
 
@@ -35,7 +35,7 @@ func makeDep(cfg *serveConfig, client *fake.Clientset) (*serveConfig, error) {
 func TestKubeswap_EnsureResourcesCreates(t *testing.T) {
 	client := newFakeClient()
 	cfg := testConfig()
-	res, err := ensureResources(client, cfg)
+	res, err := ensureResources(context.Background(), client, cfg)
 	if err != nil {
 		t.Fatalf("ensureResources: %v", err)
 	}
@@ -72,11 +72,11 @@ func TestKubeswap_EnsureResourcesCreates(t *testing.T) {
 func TestKubeswap_EnsureResourcesAdopts(t *testing.T) {
 	client := newFakeClient()
 	cfg := testConfig()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatal(err)
 	}
 	// Second invocation adopts instead of failing on AlreadyExists.
-	res, err := ensureResources(client, cfg)
+	res, err := ensureResources(context.Background(), client, cfg)
 	if err != nil {
 		t.Fatalf("second ensureResources: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestKubeswap_EnsureResourcesAdopts(t *testing.T) {
 func TestKubeswap_EnsureResourcesStrictReplace(t *testing.T) {
 	client := newFakeClient()
 	cfg := testConfig()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -105,7 +105,7 @@ func TestKubeswap_EnsureResourcesStrictReplace(t *testing.T) {
 	}
 
 	// Non-strict: adopt as-is.
-	res, err := ensureResources(client, cfg)
+	res, err := ensureResources(context.Background(), client, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestKubeswap_EnsureResourcesStrictReplace(t *testing.T) {
 
 	// Strict: replace.
 	cfg.Strict = true
-	res, err = ensureResources(client, cfg)
+	res, err = ensureResources(context.Background(), client, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestKubeswap_EnsureResourcesStrictReplace(t *testing.T) {
 func TestKubeswap_EnsureResourcesUpdatesDriftedService(t *testing.T) {
 	client := newFakeClient()
 	cfg := testConfig()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -150,7 +150,7 @@ func TestKubeswap_EnsureResourcesUpdatesDriftedService(t *testing.T) {
 	sameVersion := svc.ResourceVersion
 
 	// Unchanged Service: no update (resourceVersion stays).
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatal(err)
 	}
 	svc, _ = client.CoreV1().Services(cfg.Namespace).Get(ctx, cfg.SvcName, metav1.GetOptions{})
@@ -166,7 +166,7 @@ func TestKubeswap_EnsureResourcesUpdatesDriftedService(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := ensureResources(client, cfg)
+	res, err := ensureResources(context.Background(), client, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestKubeswap_EnsureResourcesAdoptsExistingPVC(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := testConfig()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatalf("ensureResources: %v", err)
 	}
 	// The user's PVC must not be relabeled or replaced.
@@ -227,7 +227,7 @@ func TestKubeswap_EnsureResourcesRejectsReadOnlyPVCForWritableMount(t *testing.T
 	// Read-write mount on a read-only PVC: must fail with a clear error.
 	cfg := testConfig()
 	cfg.Volumes = []volumeSpec{{Kind: volPVC, Name: "cache", Path: "/models"}}
-	if _, err := ensureResources(client, cfg); err == nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err == nil {
 		t.Fatal("expected error for a read-write mount on a read-only PVC")
 	} else if !strings.Contains(err.Error(), "read-only") {
 		t.Errorf("error should explain the access mode mismatch: %v", err)
@@ -235,7 +235,7 @@ func TestKubeswap_EnsureResourcesRejectsReadOnlyPVCForWritableMount(t *testing.T
 
 	// The same PVC is fine with a :ro mount.
 	cfg.Volumes = []volumeSpec{{Kind: volPVC, Name: "cache", Path: "/models", ReadOnly: true}}
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatalf("read-only mount on a read-only PVC should be fine: %v", err)
 	}
 
@@ -253,7 +253,7 @@ func TestKubeswap_EnsureResourcesRejectsReadOnlyPVCForWritableMount(t *testing.T
 		}
 		cfg2 := testConfig()
 		cfg2.Volumes = []volumeSpec{{Kind: volPVC, Name: "cache", Path: "/models"}}
-		if _, err := ensureResources(client2, cfg2); err != nil {
+		if _, err := ensureResources(context.Background(), client2, cfg2); err != nil {
 			t.Fatalf("read-write mount on a %v PVC should be fine: %v", mode, err)
 		}
 	}
@@ -263,7 +263,7 @@ func TestKubeswap_EnsureResourcesRejectsReadOnlyPVCForWritableMount(t *testing.T
 func TestKubeswap_DeleteModel(t *testing.T) {
 	client := newFakeClient()
 	cfg := testConfig()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -299,7 +299,7 @@ func TestKubeswap_DeleteModelKeepsUserPVC(t *testing.T) {
 	if _, err := client.CoreV1().PersistentVolumeClaims("llama-swap").Create(context.Background(), preExisting, metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatal(err)
 	}
 	if err := deleteModel(context.Background(), client, "llama-swap", "author/model:tag", true, 0); err != nil {
@@ -330,7 +330,7 @@ func TestKubeswap_EnsureResourcesRejectsForeignModel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := ensureResources(client, cfg); err == nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err == nil {
 		t.Fatal("expected adoption to be refused for a foreign model")
 	} else if !strings.Contains(err.Error(), "belongs to model \"other-model\"") {
 		t.Errorf("unexpected error: %v", err)
@@ -351,7 +351,7 @@ func TestKubeswap_DeleteModelRefusesForeignModel(t *testing.T) {
 	client := newFakeClient()
 	ctx := context.Background()
 	cfg := testConfig()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -399,10 +399,10 @@ func TestKubeswap_PodSelectionIsModelUnique(t *testing.T) {
 	client := newFakeClient()
 	ctx := context.Background()
 	cfgA, cfgB := collidingConfigs()
-	if _, err := ensureResources(client, cfgA); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfgA); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ensureResources(client, cfgB); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfgB); err != nil {
 		t.Fatal(err)
 	}
 
@@ -611,7 +611,7 @@ func TestKubeswap_StrictReplaceRetriesReservedName(t *testing.T) {
 	client := newFakeClient()
 	ctx := context.Background()
 	cfg := testConfig()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -628,7 +628,7 @@ func TestKubeswap_StrictReplaceRetriesReservedName(t *testing.T) {
 	defer func() { createRetryInterval = old }()
 
 	cfg.Strict = true
-	res, err := ensureResources(client, cfg)
+	res, err := ensureResources(context.Background(), client, cfg)
 	if err != nil {
 		t.Fatalf("strict replace: %v", err)
 	}
@@ -655,7 +655,7 @@ func TestKubeswap_DeleteIgnoresSiblingDeployment(t *testing.T) {
 	cfgA, cfgB := collidingConfigs()
 	// Model B (a sanitizing sibling) is loaded; model A is not. Deleting
 	// A must be a clean no-op, not an ownership error on B's resources.
-	if _, err := ensureResources(client, cfgB); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfgB); err != nil {
 		t.Fatal(err)
 	}
 	if err := deleteModel(context.Background(), client, cfgA.Namespace, cfgA.Model, false, 0); err != nil {
@@ -728,10 +728,10 @@ func TestKubeswap_GCCollectsStaleWorkloads(t *testing.T) {
 	cfgB.Sanitized = "model-b"
 	cfgB.DepName, _ = deploymentName(cfgB.Model)
 	cfgB.SvcName, _ = serviceName(cfgB.Model)
-	if _, err := ensureResources(client, cfgA); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfgA); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ensureResources(client, cfgB); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfgB); err != nil {
 		t.Fatal(err)
 	}
 
@@ -842,7 +842,7 @@ func TestKubeswap_FindPod(t *testing.T) {
 func TestKubeswap_PollOnceBoundedByContext(t *testing.T) {
 	client := newFakeClient()
 	cfg := testConfig()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatal(err)
 	}
 	old := apiCallTimeout
@@ -870,7 +870,7 @@ func TestKubeswap_PollOnceBoundedByContext(t *testing.T) {
 func TestKubeswap_PollOnceRequestsStopOnDeletion(t *testing.T) {
 	client := newFakeClient()
 	cfg := testConfig()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatal(err)
 	}
 	s := newServer(cfg, client, "", true, time.Millisecond, 300*time.Second)
@@ -1051,7 +1051,7 @@ func TestKubeswap_PodNotReadyReason(t *testing.T) {
 func TestKubeswap_RunLogs(t *testing.T) {
 	client := newFakeClient()
 	cfg := testConfig()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1102,7 +1102,7 @@ func TestKubeswap_RunLogs(t *testing.T) {
 func TestKubeswap_GCDryRunKeepsWorkloads(t *testing.T) {
 	client := newFakeClient()
 	cfg := testConfig()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatal(err)
 	}
 	allowed := map[string]bool{} // the model is not allowed: gc would collect it
@@ -1140,7 +1140,7 @@ func TestKubeswap_GCDryRunKeepsWorkloads(t *testing.T) {
 func TestKubeswap_StatusWatchSurvivesTransientError(t *testing.T) {
 	client := newFakeClient()
 	cfg := testConfig()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatal(err)
 	}
 	calls := 0

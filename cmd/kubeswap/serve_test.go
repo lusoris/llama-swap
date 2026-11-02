@@ -404,7 +404,7 @@ func crashedPod(cfg *serveConfig, state corev1.ContainerState) *corev1.Pod {
 func TestKubeswap_BackendCrashFailsWrapper(t *testing.T) {
 	cfg := testConfig()
 	client := newFakeClient()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatalf("ensureResources: %v", err)
 	}
 	state := corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137, Reason: "OOMKilled"}}
@@ -443,7 +443,7 @@ func TestKubeswap_BackendCrashFailsWrapper(t *testing.T) {
 func TestKubeswap_BackendCrashCrashLoop(t *testing.T) {
 	cfg := testConfig()
 	client := newFakeClient()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatalf("ensureResources: %v", err)
 	}
 	state := corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}}
@@ -501,7 +501,7 @@ func TestKubeswap_BackendCrashKeepsForeignObjects(t *testing.T) {
 func TestKubeswap_BackendCrashLosesToShutdown(t *testing.T) {
 	cfg := testConfig()
 	client := newFakeClient()
-	if _, err := ensureResources(client, cfg); err != nil {
+	if _, err := ensureResources(context.Background(), client, cfg); err != nil {
 		t.Fatalf("ensureResources: %v", err)
 	}
 	state := corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137, Reason: "OOMKilled"}}

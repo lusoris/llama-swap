@@ -64,9 +64,14 @@ const maxCreateAttempts = 20
 func waitForDeploymentGone(ctx context.Context, client kubernetes.Interface, namespace, name string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for ctx.Err() == nil {
-		// Per-iteration bound: a hung Get must not stall the loop past
-		// its deadline.
-		callCtx, cancel := context.WithTimeout(ctx, apiCallTimeout)
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out after %s waiting for deployment %s to finish deleting", timeout, name)
+		}
+		callTimeout := apiCallTimeout
+		if rem := time.Until(deadline); rem < callTimeout {
+			callTimeout = rem
+		}
+		callCtx, cancel := context.WithTimeout(ctx, callTimeout)
 		_, err := client.AppsV1().Deployments(namespace).Get(callCtx, name, metav1.GetOptions{})
 		cancel()
 		if apierrors.IsNotFound(err) {
@@ -78,7 +83,13 @@ func waitForDeploymentGone(ctx context.Context, client kubernetes.Interface, nam
 		if time.Now().After(deadline) {
 			return fmt.Errorf("timed out after %s waiting for deployment %s to finish deleting", timeout, name)
 		}
-		time.Sleep(500 * time.Millisecond)
+		t := time.NewTimer(500 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return fmt.Errorf("checking deployment %s: %w", name, ctx.Err())
+		case <-t.C:
+		}
 	}
 	return fmt.Errorf("checking deployment %s: %w", name, ctx.Err())
 }
@@ -105,6 +116,18 @@ func verifyOwnership(obj metav1.Object, modelID string) error {
 	return nil
 }
 
+// replaceDriftedDeployment deletes a drifted deployment and waits for its termination.
+func replaceDriftedDeployment(ctx context.Context, client kubernetes.Interface, cfg *serveConfig, depName string) error {
+	logf("deployment %s/%s exists but spec drifted; replacing (--strict)", cfg.Namespace, depName)
+	if err := client.AppsV1().Deployments(cfg.Namespace).Delete(ctx, depName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("deleting drifted deployment %s: %w", depName, err)
+	}
+	if err := waitForDeploymentGone(ctx, client, cfg.Namespace, depName, strictReplaceTimeout); err != nil {
+		return fmt.Errorf("replacing drifted deployment %s: %w", depName, err)
+	}
+	return nil
+}
+
 func ensureDeployment(ctx context.Context, client kubernetes.Interface, cfg *serveConfig) (bool, error) {
 	depName := cfg.DepName
 	dep, err := client.AppsV1().Deployments(cfg.Namespace).Get(ctx, depName, metav1.GetOptions{})
@@ -121,12 +144,8 @@ func ensureDeployment(ctx context.Context, client kubernetes.Interface, cfg *ser
 			return false, err
 		}
 		if !deploymentSpecMatches(dep, want) {
-			logf("deployment %s/%s exists but spec drifted; replacing (--strict)", cfg.Namespace, depName)
-			if err := client.AppsV1().Deployments(cfg.Namespace).Delete(ctx, depName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-				return false, fmt.Errorf("deleting drifted deployment %s: %w", depName, err)
-			}
-			if err := waitForDeploymentGone(ctx, client, cfg.Namespace, depName, strictReplaceTimeout); err != nil {
-				return false, fmt.Errorf("replacing drifted deployment %s: %w", depName, err)
+			if err := replaceDriftedDeployment(ctx, client, cfg, depName); err != nil {
+				return false, err
 			}
 			return false, nil
 		}
@@ -174,8 +193,8 @@ func ensureService(ctx context.Context, client kubernetes.Interface, cfg *serveC
 // Adoption and deletion only ever touch objects verified to belong to the
 // model (verifyOwnership), so colliding model IDs cannot adopt or tear
 // down each other's backends.
-func ensureResources(client kubernetes.Interface, cfg *serveConfig) (*ensureResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), ensureTimeout)
+func ensureResources(ctx context.Context, client kubernetes.Interface, cfg *serveConfig) (*ensureResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, ensureTimeout)
 	defer cancel()
 	res := &ensureResult{}
 
@@ -215,7 +234,7 @@ func pvcAllowsReadWrite(pvc *corev1.PersistentVolumeClaim) bool {
 func warnHostPathVolumes(cfg *serveConfig) {
 	for _, v := range cfg.Volumes {
 		if v.Kind == volHostPath {
-			log.Printf("WARNING: mounting host path %q at %q in the backend pod: hostpath volumes escape the namespace boundary, so the pod can read (and, without :ro, write) that part of the node", v.Name, v.Path)
+			logf("WARNING: mounting host path %q at %q in the backend pod: hostpath volumes escape the namespace boundary, so the pod can read (and, without :ro, write) that part of the node", v.Name, v.Path)
 		}
 	}
 }
@@ -342,10 +361,11 @@ type server struct {
 	logDone    chan struct{} // closed when the current log-stream goroutine exits
 	logsFailed bool
 
-	srv     *http.Server
-	stopCh  chan struct{}
-	stopMu  sync.Once
-	crashCh chan int // exit code to end the wrapper with when the backend fails
+	srv       *http.Server
+	stopCh    chan struct{}
+	stopMu    sync.Once
+	crashCh   chan int // exit code to end the wrapper with when the backend fails
+	logWriter io.Writer
 }
 
 // serveFlags holds the parsed `serve` flags.
@@ -633,6 +653,8 @@ func (s *server) runUntilShutdown(ctx context.Context, ln net.Listener) error {
 	var crashCode int
 	crashed := false
 	select {
+	case <-ctx.Done():
+		shutdownReason = "context canceled; shutting down"
 	case sig := <-sigCh:
 		shutdownReason = fmt.Sprintf("received %s; shutting down (deployment kept for adoption)", sig)
 	case <-s.stopCh:
@@ -678,7 +700,7 @@ func serveCmd(ctx context.Context, args []string) error {
 		return err
 	}
 
-	res, err := ensureResources(client, cfg)
+	res, err := ensureResources(ctx, client, cfg)
 	if err != nil {
 		return err
 	}
@@ -690,7 +712,7 @@ func serveCmd(ctx context.Context, args []string) error {
 
 	s := newServer(cfg, client, f.upstream, f.noLogs, f.poll, f.proxyResponseTimeout)
 
-	ln, err := net.Listen("tcp", f.listen)
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", f.listen)
 	if err != nil {
 		return fmt.Errorf("listening on %s: %w", f.listen, err)
 	}
@@ -735,7 +757,7 @@ func startModel(client kubernetes.Interface, f *serveFlags, fs *flag.FlagSet) er
 		return err
 	}
 	cfg.Args = fs.Args()
-	res, err := ensureResources(client, cfg)
+	res, err := ensureResources(context.Background(), client, cfg)
 	if err != nil {
 		return err
 	}
@@ -1225,16 +1247,26 @@ func (s *server) stopLogsLocked() {
 	s.logUID = ""
 }
 
-func (s *server) readLogStream(stream io.ReadCloser, podName string) {
+func (s *server) readLogStream(ctx context.Context, stream io.ReadCloser, podName string) {
 	defer func() {
 		if err := stream.Close(); err != nil {
 			log.Printf("closing log stream for pod %s: %v", podName, err)
 		}
 	}()
+	var out io.Writer = os.Stderr
+	if s != nil && s.logWriter != nil {
+		out = s.logWriter
+	}
 	scanner := bufio.NewScanner(stream)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
-		fmt.Fprintf(os.Stderr, "[pod/%s] %s\n", podName, scanner.Text())
+		line := strings.ReplaceAll(strings.ReplaceAll(scanner.Text(), "\n", `\n`), "\r", `\r`)
+		if _, err := fmt.Fprintf(out, "[pod/%s] %s\n", podName, line); err != nil {
+			break
+		}
+	}
+	if err := scanner.Err(); err != nil && ctx.Err() == nil {
+		logf("reading log stream for pod %s: %v", podName, err)
 	}
 }
 
@@ -1265,7 +1297,7 @@ func (s *server) streamLogs(ctx context.Context, pod *corev1.Pod) {
 			}
 			continue
 		}
-		s.readLogStream(stream, pod.Name)
+		s.readLogStream(ctx, stream, pod.Name)
 		return
 	}
 }
