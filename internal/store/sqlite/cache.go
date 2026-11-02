@@ -28,6 +28,9 @@ var _ store.CacheRepository = (*cacheRepository)(nil)
 // and a concurrent writer almost never lands in it by chance.
 var beforeExpiryDelete func()
 
+// now returns the current time; overridden in tests to freeze or advance the clock.
+var now = time.Now
+
 func (r *cacheRepository) Get(ctx context.Context, key string) (store.CacheEntry, bool, error) {
 	var (
 		data []byte
@@ -45,8 +48,14 @@ func (r *cacheRepository) Get(ctx context.Context, key string) (store.CacheEntry
 		return store.CacheEntry{}, false, fmt.Errorf("get cache: %w", err)
 	}
 
-	now := time.Now()
-	if expiredAt(ts, ttl, now.Unix()) {
+	entry := store.CacheEntry{
+		Key:       key,
+		Data:      data,
+		TTL:       time.Duration(ttl) * time.Second,
+		Timestamp: time.Unix(ts, 0),
+	}
+	n := now()
+	if entry.Expired(n) {
 		if beforeExpiryDelete != nil {
 			beforeExpiryDelete()
 		}
@@ -61,37 +70,40 @@ func (r *cacheRepository) Get(ctx context.Context, key string) (store.CacheEntry
 		if _, err := r.db.ExecContext(ctx, `
 			DELETE FROM cache
 			WHERE key = ? AND ttl_seconds > 0 AND ts_created + ttl_seconds < ?`,
-			key, now.Unix(),
+			key, n.Unix(),
 		); err != nil {
 			return store.CacheEntry{}, false, fmt.Errorf("delete expired cache: %w", err)
 		}
 		return store.CacheEntry{}, false, nil
 	}
 
-	entry := store.CacheEntry{
-		Key:       key,
-		Data:      data,
-		TTL:       time.Duration(ttl) * time.Second,
-		Timestamp: time.Unix(ts, 0),
-	}
 	return entry, true, nil
 }
 
-// expiredAt reports whether an entry created at ts has expired at nowUnix.
-func expiredAt(ts, ttlSeconds, nowUnix int64) bool {
-	return ttlSeconds > 0 && nowUnix > ts+ttlSeconds
+// ceilUnix returns t rounded up to the nearest whole second as a Unix timestamp.
+func ceilUnix(t time.Time) int64 {
+	ts := t.Unix()
+	if t.Nanosecond() != 0 {
+		ts++
+	}
+	return ts
 }
 
 func (r *cacheRepository) Set(ctx context.Context, entry store.CacheEntry) error {
 	if entry.Timestamp.IsZero() {
-		entry.Timestamp = time.Now()
+		entry.Timestamp = now()
 	}
+	// ts_created rounds up, so an entry lives at least its TTL and Get agrees with CacheEntry.Expired.
 	// ttl_seconds is whole seconds, and 0 means "never expires". Rounding a
 	// positive TTL down would turn anything under a second into a permanent
 	// row, so round up instead: a positive TTL always expires.
 	ttl := int64(0)
 	if entry.TTL > 0 {
-		ttl = int64((entry.TTL + time.Second - 1) / time.Second)
+		q := entry.TTL / time.Second
+		if entry.TTL%time.Second != 0 {
+			q++
+		}
+		ttl = int64(q)
 	}
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO cache (key, data, ttl_seconds, ts_created)
@@ -100,7 +112,7 @@ func (r *cacheRepository) Set(ctx context.Context, entry store.CacheEntry) error
 			data = excluded.data,
 			ttl_seconds = excluded.ttl_seconds,
 			ts_created = excluded.ts_created`,
-		entry.Key, entry.Data, ttl, entry.Timestamp.Unix(),
+		entry.Key, entry.Data, ttl, ceilUnix(entry.Timestamp),
 	)
 	if err != nil {
 		return fmt.Errorf("set cache: %w", err)
@@ -119,7 +131,7 @@ func (r *cacheRepository) Prune(ctx context.Context) error {
 	_, err := r.db.ExecContext(ctx, `
 		DELETE FROM cache
 		WHERE ttl_seconds > 0 AND ts_created + ttl_seconds < ?`,
-		time.Now().Unix(),
+		now().Unix(),
 	)
 	if err != nil {
 		return fmt.Errorf("prune cache: %w", err)

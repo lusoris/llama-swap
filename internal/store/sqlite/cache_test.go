@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"math"
 	"path/filepath"
 	"testing"
 	"time"
@@ -312,49 +313,44 @@ func TestStore_CacheEntryExpired(t *testing.T) {
 	}
 }
 
-// TestStore_CacheExpiredAt tests expiry calculation against whole seconds.
-func TestStore_CacheExpiredAt(t *testing.T) {
+// TestStore_CacheCeilUnix tests rounding timestamps up to whole seconds.
+func TestStore_CacheCeilUnix(t *testing.T) {
 	const base = int64(1750000000)
 
 	tests := []struct {
-		name       string
-		ts         int64
-		ttlSeconds int64
-		nowUnix    int64
-		want       bool
+		name string
+		in   time.Time
+		want int64
 	}{
 		{
-			name:       "written at second boundary and read 999 ms later",
-			ts:         base,
-			ttlSeconds: 1,
-			nowUnix:    base,
-			want:       false,
+			name: "whole second stays",
+			in:   time.Unix(base, 0),
+			want: base,
 		},
 		{
-			name:       "ts plus ttl equals now",
-			ts:         base,
-			ttlSeconds: 10,
-			nowUnix:    base + 10,
-			want:       false,
+			name: "one nanosecond past whole second rounds up",
+			in:   time.Unix(base, 1),
+			want: base + 1,
 		},
 		{
-			name:       "now equals ts plus ttl plus one",
-			ts:         base,
-			ttlSeconds: 10,
-			nowUnix:    base + 11,
-			want:       true,
+			name: "sub-second 999ms rounds up",
+			in:   time.Unix(base, 999_000_000),
+			want: base + 1,
 		},
 		{
-			name:       "ttl zero never expires",
-			ts:         base,
-			ttlSeconds: 0,
-			nowUnix:    base + 1000,
-			want:       false,
+			name: "negative-epoch whole second stays",
+			in:   time.Unix(-10, 0),
+			want: -10,
+		},
+		{
+			name: "negative-epoch sub-second rounds up",
+			in:   time.Unix(-10, 500_000_000),
+			want: -9,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, expiredAt(tt.ts, tt.ttlSeconds, tt.nowUnix))
+			assert.Equal(t, tt.want, ceilUnix(tt.in))
 		})
 	}
 }
@@ -364,15 +360,64 @@ func TestStore_CacheSubSecondBoundary(t *testing.T) {
 	ctx := context.Background()
 	_, cache := newCacheStore(t)
 
+	const base = int64(1750000000)
+	t.Cleanup(func() { now = time.Now })
+
 	require.NoError(t, cache.Set(ctx, store.CacheEntry{
 		Key:       "boundary",
 		Data:      []byte("v"),
 		TTL:       time.Second,
-		Timestamp: time.Unix(time.Now().Unix()-1, 999_000_000),
+		Timestamp: time.Unix(base, 999_000_000),
 	}))
 
+	now = func() time.Time { return time.Unix(base+1, 1_000_000) }
 	got, found, err := cache.Get(ctx, "boundary")
 	require.NoError(t, err)
 	require.True(t, found, "it should still be readable within the rounded up window")
 	assert.Equal(t, []byte("v"), got.Data)
+	assert.False(t, got.Expired(now()))
+
+	now = func() time.Time { return time.Unix(base+2, 1_000_000) }
+	_, found, err = cache.Get(ctx, "boundary")
+	require.NoError(t, err)
+	assert.False(t, found, "it should expire past the rounded up window")
+}
+
+func TestStore_CacheTTLOverflow(t *testing.T) {
+	ctx := context.Background()
+	st, cache := newCacheStore(t)
+
+	const base = int64(1750000000)
+	t.Cleanup(func() { now = time.Now })
+
+	now = func() time.Time { return time.Unix(base, 0) }
+	require.NoError(t, cache.Set(ctx, store.CacheEntry{
+		Key:       "overflow",
+		Data:      []byte("v"),
+		TTL:       time.Duration(math.MaxInt64),
+		Timestamp: time.Unix(base, 0),
+	}))
+
+	var ttlSeconds int64
+	require.NoError(t, st.db.QueryRow(`SELECT ttl_seconds FROM cache WHERE key = 'overflow'`).Scan(&ttlSeconds))
+	assert.Positive(t, ttlSeconds, "never negative ttl")
+
+	now = func() time.Time { return time.Unix(base+1_000_000, 0) }
+	got, found, err := cache.Get(ctx, "overflow")
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, []byte("v"), got.Data)
+
+	now = func() time.Time { return time.Unix(base+1, 0) }
+	require.NoError(t, cache.Set(ctx, store.CacheEntry{
+		Key:       "round-up",
+		Data:      []byte("v"),
+		TTL:       1500 * time.Millisecond,
+		Timestamp: time.Unix(base, 0),
+	}))
+
+	got, found, err = cache.Get(ctx, "round-up")
+	require.NoError(t, err)
+	require.True(t, found)
+	assert.Equal(t, 2*time.Second, got.TTL)
 }
