@@ -88,60 +88,62 @@ func decodeConfigWithMacros(r io.Reader) (Config, error) {
 	return config, nil
 }
 
-func applyGlobalDefaultsAndValidate(config *Config) error {
+func applyGlobalDefaults(config *Config) {
 	if config.HealthCheckTimeout < 15 {
 		config.HealthCheckTimeout = 15
 	}
-
-	// Apply defaults for performance config when section is missing
 	if config.Performance.Every == 0 {
 		config.Performance.Every = 5 * time.Second
-	}
-	if err := config.Performance.Validate(); err != nil {
-		return fmt.Errorf("performance: %w", err)
-	}
-
-	if config.StartPort < 1 {
-		return fmt.Errorf("startPort must be greater than 1")
-	}
-
-	if config.GlobalTTL < 0 {
-		return fmt.Errorf("globalTTL must be >= 0")
-	}
-
-	if config.UnloadTimeout < 0 {
-		return fmt.Errorf("unloadTimeout must be >= 0")
 	}
 	if config.UnloadTimeout == 0 {
 		config.UnloadTimeout = DEFAULT_UNLOAD_TIMEOUT
 	}
+	config.UI.Activity.SessionID = normalizeHeaderNames(config.UI.Activity.SessionID)
+	if len(config.Upstream.IgnorePaths) == 0 {
+		config.Upstream.IgnorePaths = DefaultUpstreamIgnorePaths()
+	}
+}
 
+func validateGlobalLimits(config *Config) error {
+	if config.StartPort < 1 {
+		return fmt.Errorf("startPort must be greater than 1")
+	}
+	if config.GlobalTTL < 0 {
+		return fmt.Errorf("globalTTL must be >= 0")
+	}
+	if config.UnloadTimeout < 0 {
+		return fmt.Errorf("unloadTimeout must be >= 0")
+	}
 	if config.GlobalConcurrencyLimit < 0 {
 		return fmt.Errorf("globalConcurrencyLimit must be >= 0")
 	}
+	return nil
+}
 
-	config.UI.Activity.SessionID = normalizeHeaderNames(config.UI.Activity.SessionID)
-
+func validateGlobalSettings(config *Config) error {
+	if err := config.Performance.Validate(); err != nil {
+		return fmt.Errorf("performance: %w", err)
+	}
+	if err := validateGlobalLimits(config); err != nil {
+		return err
+	}
 	if config.Store != nil {
 		if err := validateStorePath(config.Store.Path); err != nil {
 			return err
 		}
 	}
-
-	// Apply default for upstream.ignorePaths when not specified. The default
-	// matches common static-asset suffixes so they do not trigger a swap.
-	if len(config.Upstream.IgnorePaths) == 0 {
-		config.Upstream.IgnorePaths = DefaultUpstreamIgnorePaths()
-	}
-
 	if err := config.Security.CORS.Validate(); err != nil {
 		return fmt.Errorf("security.cors: %w", err)
 	}
-
 	if _, _, _, err := ParseLogToStdout(config.LogToStdout); err != nil {
 		return err
 	}
 	return nil
+}
+
+func applyGlobalDefaultsAndValidate(config *Config) error {
+	applyGlobalDefaults(config)
+	return validateGlobalSettings(config)
 }
 
 func populateModelAliases(config *Config) error {
@@ -177,21 +179,21 @@ func normalizeAndValidateModels(config *Config) error {
 	return nil
 }
 
-func normalizeModel(config *Config, modelId string) error {
-	modelConfig := config.Models[modelId]
-	modelConfig.HealthCheckTimeout = config.HealthCheckTimeout
-	if modelId == ComfyUIModelID {
-		if modelConfig.ConcurrencyLimit < comfyUIConcurrencyLimit {
-			modelConfig.ConcurrencyLimit = comfyUIConcurrencyLimit
-		}
-		modelConfig.Compat.IgnoreWebsockets = true
+func applyComfyUIDefaults(modelConfig *ModelConfig, modelId string) {
+	if modelId != ComfyUIModelID {
+		return
 	}
+	if modelConfig.ConcurrencyLimit < comfyUIConcurrencyLimit {
+		modelConfig.ConcurrencyLimit = comfyUIConcurrencyLimit
+	}
+	modelConfig.Compat.IgnoreWebsockets = true
+}
 
+func normalizeModelTimeouts(modelConfig *ModelConfig, config *Config, modelId string) error {
 	// set model TTL to globalTTL it is the default value
 	if modelConfig.UnloadAfter == MODEL_CONFIG_DEFAULT_TTL {
 		modelConfig.UnloadAfter = config.GlobalTTL
 	}
-
 	if modelConfig.UnloadAfter < 0 {
 		return fmt.Errorf("model %s: invalid TTL value %d", modelId, modelConfig.UnloadAfter)
 	}
@@ -202,6 +204,17 @@ func normalizeModel(config *Config, modelId string) error {
 	}
 	if modelConfig.UnloadTimeout == 0 {
 		modelConfig.UnloadTimeout = config.UnloadTimeout
+	}
+	return nil
+}
+
+func normalizeModel(config *Config, modelId string) error {
+	modelConfig := config.Models[modelId]
+	modelConfig.HealthCheckTimeout = config.HealthCheckTimeout
+	applyComfyUIDefaults(&modelConfig, modelId)
+
+	if err := normalizeModelTimeouts(&modelConfig, config, modelId); err != nil {
+		return err
 	}
 
 	if err := modelConfig.Capabilities.Validate(); err != nil {
@@ -246,32 +259,46 @@ func registerFilterAliases(config *Config, modelId string, modelConfig *ModelCon
 	return nil
 }
 
+func hasLegacyRouting(config *Config) bool {
+	return config.Matrix != nil || len(config.Groups) > 0
+}
+
+func hasBlockRouting(rtr RouterConfig) bool {
+	return rtr.Use != "" || rtr.Settings.Matrix != nil || len(rtr.Settings.Groups) > 0
+}
+
+func resolveRouterSettings(config *Config) error {
+	// Both groups and matrix may be defined under routing.router.settings;
+	// routing.router.use selects which one is active, so there is no conflict.
+	rs := config.Routing.Router.Settings
+	switch config.Routing.Router.Use {
+	case "matrix":
+		if rs.Matrix == nil {
+			return fmt.Errorf("routing.router.use is 'matrix' but routing.router.settings.matrix is not set")
+		}
+		config.Matrix = rs.Matrix
+	case "group", "":
+		config.Groups = rs.Groups
+	default:
+		return fmt.Errorf("routing.router.use: unknown router %q (valid: group, matrix)", config.Routing.Router.Use)
+	}
+	return nil
+}
+
 func resolveRouting(config *Config) error {
 	// Normalize routing config. The legacy top-level `matrix`/`groups` keys and
 	// the new `routing.router` block are mutually exclusive: a config may use
 	// either style, never both.
-	hasTopLevel := config.Matrix != nil || len(config.Groups) > 0
-	rtr := config.Routing.Router
-	hasRouting := rtr.Use != "" || rtr.Settings.Matrix != nil || len(rtr.Settings.Groups) > 0
+	hasTopLevel := hasLegacyRouting(config)
+	hasRouting := hasBlockRouting(config.Routing.Router)
 
 	if hasTopLevel && hasRouting {
 		return fmt.Errorf("config uses both the legacy top-level 'matrix'/'groups' keys and the new 'routing.router' block; please migrate the top-level keys into 'routing.router' and remove them")
 	}
 
 	if !hasTopLevel {
-		// Both groups and matrix may be defined under routing.router.settings;
-		// routing.router.use selects which one is active, so there is no conflict.
-		rs := config.Routing.Router.Settings
-		switch config.Routing.Router.Use {
-		case "matrix":
-			if rs.Matrix == nil {
-				return fmt.Errorf("routing.router.use is 'matrix' but routing.router.settings.matrix is not set")
-			}
-			config.Matrix = rs.Matrix
-		case "group", "":
-			config.Groups = rs.Groups
-		default:
-			return fmt.Errorf("routing.router.use: unknown router %q (valid: group, matrix)", config.Routing.Router.Use)
+		if err := resolveRouterSettings(config); err != nil {
+			return err
 		}
 	}
 
@@ -337,23 +364,24 @@ func finalizeRouting(config *Config) error {
 	return nil
 }
 
-func finalizeConfig(config *Config) error {
-	// Clean up hooks preload
-	if len(config.Hooks.OnStartup.Preload) > 0 {
-		var toPreload []string
-		for _, modelID := range config.Hooks.OnStartup.Preload {
-			modelID = strings.TrimSpace(modelID)
-			if modelID == "" {
-				continue
-			}
-			if real, found := config.RealModelName(modelID); found {
-				toPreload = append(toPreload, real)
-			}
-		}
-		config.Hooks.OnStartup.Preload = toPreload
+func cleanupStartupPreload(config *Config) {
+	if len(config.Hooks.OnStartup.Preload) == 0 {
+		return
 	}
+	var toPreload []string
+	for _, modelID := range config.Hooks.OnStartup.Preload {
+		modelID = strings.TrimSpace(modelID)
+		if modelID == "" {
+			continue
+		}
+		if real, found := config.RealModelName(modelID); found {
+			toPreload = append(toPreload, real)
+		}
+	}
+	config.Hooks.OnStartup.Preload = toPreload
+}
 
-	// Validate API keys (env macros already substituted at string level)
+func validateAPIKeys(config *Config) error {
 	for i, apikey := range config.RequiredAPIKeys {
 		if apikey == "" {
 			return fmt.Errorf("empty api key found in apiKeys")
@@ -362,6 +390,15 @@ func finalizeConfig(config *Config) error {
 			return fmt.Errorf("apiKeys[%d]: api key cannot contain spaces", i)
 		}
 		config.RequiredAPIKeys[i] = apikey
+	}
+	return nil
+}
+
+func finalizeConfig(config *Config) error {
+	cleanupStartupPreload(config)
+
+	if err := validateAPIKeys(config); err != nil {
+		return err
 	}
 
 	if err := ValidatePeerNamespace(*config); err != nil {

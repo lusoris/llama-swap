@@ -826,6 +826,7 @@ func (p *ProcessCommand) sendStopSignal(cmd *exec.Cmd) error {
 			stopCtx, cancel := context.WithTimeout(p.detachedCtx, timeout)
 			defer cancel()
 			stopCmd := exec.CommandContext(stopCtx, stopArgs[0], stopArgs[1:]...)
+			stopCmd.Cancel = func() error { return killProcessTree(stopCmd) }
 			stopCmd.Stderr = p.processLogger
 			stopCmd.Stdout = p.processLogger
 			// Bound the pipe copy so a CmdStop that backgrounds a child

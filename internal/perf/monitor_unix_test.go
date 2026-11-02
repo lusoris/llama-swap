@@ -3,8 +3,10 @@
 package perf
 
 import (
+	"bytes"
 	"testing"
 
+	"github.com/mostlygeek/llama-swap/internal/logmon"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -78,4 +80,90 @@ func TestParseRocmSmiLine_InvalidLines(t *testing.T) {
 			assert.Nil(t, stat)
 		})
 	}
+}
+
+func TestApplyRocmSmiCol_ValidAndMalformed(t *testing.T) {
+	result := &GpuStat{
+		ID:          -1,
+		TempC:       10,
+		VramTempC:   20,
+		FanSpeedPct: 30,
+		PowerDrawW:  40,
+		GpuUtilPct:  50,
+		MemTotalMB:  1000,
+		MemUsedMB:   500,
+	}
+	var meta rocmSmiMeta
+
+	assert.True(t, applyRocmSmiCol("device", "card2", result, &meta))
+	assert.Equal(t, 2, result.ID)
+	assert.Equal(t, "card2", meta.device)
+
+	assert.True(t, applyRocmSmiCol("Device Name", "Radeon RX 7900", result, &meta))
+	assert.Equal(t, "Radeon RX 7900", meta.deviceName)
+
+	assert.True(t, applyRocmSmiCol("GUID", "guid-1234", result, &meta))
+	assert.Equal(t, "guid-1234", result.UUID)
+
+	assert.True(t, applyRocmSmiCol("Card Series", "Navi 31", result, &meta))
+	assert.Equal(t, "Navi 31", meta.cardSeries)
+
+	assert.True(t, applyRocmSmiCol("GFX Version", "gfx1100", result, &meta))
+	assert.Equal(t, "gfx1100", meta.gfxVersion)
+
+	assert.True(t, applyRocmSmiCol("Temperature (Sensor edge) (C)", "55.0", result, &meta))
+	assert.Equal(t, 55, result.TempC)
+
+	assert.True(t, applyRocmSmiCol("Temperature (Sensor memory) (C)", "65.0", result, &meta))
+	assert.Equal(t, 65, result.VramTempC)
+
+	assert.True(t, applyRocmSmiCol("Fan speed (%)", "45.5", result, &meta))
+	assert.Equal(t, 45.5, result.FanSpeedPct)
+
+	assert.True(t, applyRocmSmiCol("Current Socket Graphics Package Power (W)", "150.0", result, &meta))
+	assert.Equal(t, 150.0, result.PowerDrawW)
+
+	assert.True(t, applyRocmSmiCol("Average Graphics Package Power (W)", "160.0", result, &meta))
+	assert.Equal(t, 160.0, result.PowerDrawW)
+
+	assert.True(t, applyRocmSmiCol("GPU use (%)", "92.0", result, &meta))
+	assert.Equal(t, 92.0, result.GpuUtilPct)
+
+	assert.True(t, applyRocmSmiCol("VRAM Total Memory (B)", "34359738368", result, &meta))
+	assert.Equal(t, 32768, result.MemTotalMB)
+
+	assert.True(t, applyRocmSmiCol("VRAM Total Used Memory (B)", "17179869184", result, &meta))
+	assert.Equal(t, 16384, result.MemUsedMB)
+
+	// Malformed numeric value keeps previous value and logs debug message
+	buf := &bytes.Buffer{}
+	logger := logmon.NewWriter(buf)
+	logger.SetLogLevel(logmon.LevelDebug)
+
+	assert.True(t, applyRocmSmiCol("Temperature (Sensor edge) (C)", "not-a-number", result, &meta, logger))
+	assert.Equal(t, 55, result.TempC) // kept previous value
+
+	assert.True(t, applyRocmSmiCol("Temperature (Sensor memory) (C)", "xyz", result, &meta, logger))
+	assert.Equal(t, 65, result.VramTempC) // kept previous value
+
+	assert.True(t, applyRocmSmiCol("Fan speed (%)", "invalid", result, &meta, logger))
+	assert.Equal(t, 45.5, result.FanSpeedPct) // kept previous value
+
+	assert.True(t, applyRocmSmiCol("Average Graphics Package Power (W)", "corrupt", result, &meta, logger))
+	assert.Equal(t, 160.0, result.PowerDrawW) // kept previous value
+
+	assert.True(t, applyRocmSmiCol("GPU use (%)", "bad", result, &meta, logger))
+	assert.Equal(t, 92.0, result.GpuUtilPct) // kept previous value
+
+	assert.True(t, applyRocmSmiCol("VRAM Total Memory (B)", "broken", result, &meta, logger))
+	assert.Equal(t, 32768, result.MemTotalMB) // kept previous value
+
+	assert.True(t, applyRocmSmiCol("VRAM Total Used Memory (B)", "damaged", result, &meta, logger))
+	assert.Equal(t, 16384, result.MemUsedMB) // kept previous value
+
+	logOutput := buf.String()
+	assert.Contains(t, logOutput, "Temperature (Sensor edge) (C)")
+	assert.Contains(t, logOutput, "not-a-number")
+	assert.Contains(t, logOutput, "VRAM Total Memory (B)")
+	assert.Contains(t, logOutput, "broken")
 }

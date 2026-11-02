@@ -101,7 +101,9 @@ func tryLACT(ctx context.Context, every time.Duration, logger *logmon.Monitor) (
 	}
 	defer conn.Close()
 
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		return nil, fmt.Errorf("cannot set deadline on LACT socket: %w", err)
+	}
 
 	devices, err := lactListDevices(conn)
 	if err != nil {
@@ -209,10 +211,10 @@ func pollRocmSmi(ctx context.Context, logger *logmon.Monitor) []GpuStat {
 		}
 		return nil
 	}
-	return parseRocmSmiOutput(out)
+	return parseRocmSmiOutput(out, logger)
 }
 
-func parseRocmSmiOutput(out []byte) []GpuStat {
+func parseRocmSmiOutput(out []byte, logger *logmon.Monitor) []GpuStat {
 	stats := make([]GpuStat, 0)
 	scanner := bufio.NewScanner(strings.NewReader(string(out)))
 	var header string
@@ -226,7 +228,7 @@ func parseRocmSmiOutput(out []byte) []GpuStat {
 			continue
 		}
 
-		stat := parseRocmSmiLine(header, line)
+		stat := parseRocmSmiLine(header, line, logger)
 		if stat != nil {
 			stats = append(stats, *stat)
 		}
@@ -275,54 +277,114 @@ type rocmSmiMeta struct {
 	gfxVersion string
 }
 
-func applyRocmSmiCol(col, val string, result *GpuStat, meta *rocmSmiMeta) bool {
+type rocmColSetter func(col, val string, result *GpuStat, meta *rocmSmiMeta, logger *logmon.Monitor) bool
+
+func parseRocmFloat(col, val string, logger *logmon.Monitor) (float64, bool) {
+	v, err := strconv.ParseFloat(val, 64)
+	if err != nil {
+		if logger != nil {
+			logger.Debugf("rocm-smi: rejected column %q with malformed numeric value %q: %v", col, val, err)
+		}
+		return 0, false
+	}
+	return v, true
+}
+
+func parseRocmBytesToMB(col, val string, logger *logmon.Monitor) (int, bool) {
 	const toMB = 1024 * 1024
-	switch col {
-	case "device":
+	b, err := strconv.ParseUint(val, 10, 64)
+	if err != nil {
+		if logger != nil {
+			logger.Debugf("rocm-smi: rejected column %q with malformed numeric value %q: %v", col, val, err)
+		}
+		return 0, false
+	}
+	return int(b / toMB), true
+}
+
+func setRocmPower(col, val string, result *GpuStat, meta *rocmSmiMeta, logger *logmon.Monitor) bool {
+	if v, ok := parseRocmFloat(col, val, logger); ok {
+		result.PowerDrawW = v
+	}
+	return true
+}
+
+var rocmSmiColSetters = map[string]rocmColSetter{
+	"device": func(col, val string, result *GpuStat, meta *rocmSmiMeta, logger *logmon.Monitor) bool {
 		meta.device = val
 		id, err := strconv.Atoi(strings.TrimPrefix(val, "card"))
 		if err != nil {
 			return false
 		}
 		result.ID = id
-	case "Device Name":
+		return true
+	},
+	"Device Name": func(col, val string, result *GpuStat, meta *rocmSmiMeta, logger *logmon.Monitor) bool {
 		meta.deviceName = val
-	case "GUID":
+		return true
+	},
+	"GUID": func(col, val string, result *GpuStat, meta *rocmSmiMeta, logger *logmon.Monitor) bool {
 		result.UUID = val
-	case "Temperature (Sensor edge) (C)":
-		if tempC, err := strconv.ParseFloat(val, 64); err == nil {
-			result.TempC = int(tempC)
+		return true
+	},
+	"Temperature (Sensor edge) (C)": func(col, val string, result *GpuStat, meta *rocmSmiMeta, logger *logmon.Monitor) bool {
+		if v, ok := parseRocmFloat(col, val, logger); ok {
+			result.TempC = int(v)
 		}
-	case "Temperature (Sensor memory) (C)":
-		if vramTempC, err := strconv.ParseFloat(val, 64); err == nil {
-			result.VramTempC = int(vramTempC)
+		return true
+	},
+	"Temperature (Sensor memory) (C)": func(col, val string, result *GpuStat, meta *rocmSmiMeta, logger *logmon.Monitor) bool {
+		if v, ok := parseRocmFloat(col, val, logger); ok {
+			result.VramTempC = int(v)
 		}
-	case "Fan speed (%)":
-		if fanSpeed, err := strconv.ParseFloat(val, 64); err == nil {
-			result.FanSpeedPct = fanSpeed
+		return true
+	},
+	"Fan speed (%)": func(col, val string, result *GpuStat, meta *rocmSmiMeta, logger *logmon.Monitor) bool {
+		if v, ok := parseRocmFloat(col, val, logger); ok {
+			result.FanSpeedPct = v
 		}
-	case "Current Socket Graphics Package Power (W)", "Average Graphics Package Power (W)":
-		if powerDraw, err := strconv.ParseFloat(val, 64); err == nil {
-			result.PowerDrawW = powerDraw
+		return true
+	},
+	"Current Socket Graphics Package Power (W)": setRocmPower,
+	"Average Graphics Package Power (W)":        setRocmPower,
+	"GPU use (%)": func(col, val string, result *GpuStat, meta *rocmSmiMeta, logger *logmon.Monitor) bool {
+		if v, ok := parseRocmFloat(col, val, logger); ok {
+			result.GpuUtilPct = v
 		}
-	case "GPU use (%)":
-		if gpuUtil, err := strconv.ParseFloat(val, 64); err == nil {
-			result.GpuUtilPct = gpuUtil
+		return true
+	},
+	"VRAM Total Memory (B)": func(col, val string, result *GpuStat, meta *rocmSmiMeta, logger *logmon.Monitor) bool {
+		if v, ok := parseRocmBytesToMB(col, val, logger); ok {
+			result.MemTotalMB = v
 		}
-	case "VRAM Total Memory (B)":
-		if memTotal, err := strconv.ParseUint(val, 10, 64); err == nil {
-			result.MemTotalMB = int(memTotal / toMB)
+		return true
+	},
+	"VRAM Total Used Memory (B)": func(col, val string, result *GpuStat, meta *rocmSmiMeta, logger *logmon.Monitor) bool {
+		if v, ok := parseRocmBytesToMB(col, val, logger); ok {
+			result.MemUsedMB = v
 		}
-	case "VRAM Total Used Memory (B)":
-		if memUsed, err := strconv.ParseUint(val, 10, 64); err == nil {
-			result.MemUsedMB = int(memUsed / toMB)
-		}
-	case "Card Series":
+		return true
+	},
+	"Card Series": func(col, val string, result *GpuStat, meta *rocmSmiMeta, logger *logmon.Monitor) bool {
 		meta.cardSeries = val
-	case "GFX Version":
+		return true
+	},
+	"GFX Version": func(col, val string, result *GpuStat, meta *rocmSmiMeta, logger *logmon.Monitor) bool {
 		meta.gfxVersion = val
+		return true
+	},
+}
+
+func applyRocmSmiCol(col, val string, result *GpuStat, meta *rocmSmiMeta, loggers ...*logmon.Monitor) bool {
+	setter, ok := rocmSmiColSetters[col]
+	if !ok {
+		return true
 	}
-	return true
+	var logger *logmon.Monitor
+	if len(loggers) > 0 {
+		logger = loggers[0]
+	}
+	return setter(col, val, result, meta, logger)
 }
 
 func formatRocmDeviceName(meta rocmSmiMeta) string {
@@ -335,7 +397,7 @@ func formatRocmDeviceName(meta rocmSmiMeta) string {
 	return meta.device
 }
 
-func parseRocmSmiLine(header string, line string) *GpuStat {
+func parseRocmSmiLine(header string, line string, loggers ...*logmon.Monitor) *GpuStat {
 	if header == "" || line == "" {
 		return nil
 	}
@@ -350,10 +412,14 @@ func parseRocmSmiLine(header string, line string) *GpuStat {
 		ID:        -1,
 	}
 	var meta rocmSmiMeta
+	var logger *logmon.Monitor
+	if len(loggers) > 0 {
+		logger = loggers[0]
+	}
 
 	for i, col := range labels {
 		val := strings.TrimSpace(fields[i])
-		if !applyRocmSmiCol(col, val, result, &meta) {
+		if !applyRocmSmiCol(col, val, result, &meta, logger) {
 			return nil
 		}
 	}
@@ -472,30 +538,33 @@ func lactListDevices(conn net.Conn) ([]lactDeviceEntry, error) {
 	return devices, nil
 }
 
-func lactExtractTemps(temps map[string]lactTempEntry) (int, int) {
-	var tempC int
+func lactExtractGpuTemp(temps map[string]lactTempEntry) int {
 	if t, ok := temps["edge"]; ok && t.Current != nil {
-		tempC = int(*t.Current)
-	} else if t, ok := temps["junction"]; ok && t.Current != nil {
-		tempC = int(*t.Current)
-	} else {
-		for _, t := range temps {
-			if t.Current != nil {
-				tempC = int(*t.Current)
-				break
-			}
+		return int(*t.Current)
+	}
+	if t, ok := temps["junction"]; ok && t.Current != nil {
+		return int(*t.Current)
+	}
+	for _, t := range temps {
+		if t.Current != nil {
+			return int(*t.Current)
 		}
 	}
+	return 0
+}
 
-	var vramTempC int
+func lactExtractVramTemp(temps map[string]lactTempEntry) int {
 	// nvidia uses "VRAM", amd "mem"
 	for _, key := range []string{"mem", "VRAM"} {
 		if t, ok := temps[key]; ok && t.Current != nil && *t.Current > 0 {
-			vramTempC = int(*t.Current)
-			break
+			return int(*t.Current)
 		}
 	}
-	return tempC, vramTempC
+	return 0
+}
+
+func lactExtractTemps(temps map[string]lactTempEntry) (int, int) {
+	return lactExtractGpuTemp(temps), lactExtractVramTemp(temps)
 }
 
 func lactBuildGpuStat(stats lactDeviceStats, id string, name string, index int) GpuStat {
