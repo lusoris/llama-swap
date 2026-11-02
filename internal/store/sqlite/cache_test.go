@@ -311,3 +311,68 @@ func TestStore_CacheEntryExpired(t *testing.T) {
 		})
 	}
 }
+
+// TestStore_CacheExpiredAt tests expiry calculation against whole seconds.
+func TestStore_CacheExpiredAt(t *testing.T) {
+	const base = int64(1750000000)
+
+	tests := []struct {
+		name       string
+		ts         int64
+		ttlSeconds int64
+		nowUnix    int64
+		want       bool
+	}{
+		{
+			name:       "written at second boundary and read 999 ms later",
+			ts:         base,
+			ttlSeconds: 1,
+			nowUnix:    base,
+			want:       false,
+		},
+		{
+			name:       "ts plus ttl equals now",
+			ts:         base,
+			ttlSeconds: 10,
+			nowUnix:    base + 10,
+			want:       false,
+		},
+		{
+			name:       "now equals ts plus ttl plus one",
+			ts:         base,
+			ttlSeconds: 10,
+			nowUnix:    base + 11,
+			want:       true,
+		},
+		{
+			name:       "ttl zero never expires",
+			ts:         base,
+			ttlSeconds: 0,
+			nowUnix:    base + 1000,
+			want:       false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, expiredAt(tt.ts, tt.ttlSeconds, tt.nowUnix))
+		})
+	}
+}
+
+// TestStore_CacheSubSecondBoundary verifies an entry written across a second boundary is readable.
+func TestStore_CacheSubSecondBoundary(t *testing.T) {
+	ctx := context.Background()
+	_, cache := newCacheStore(t)
+
+	require.NoError(t, cache.Set(ctx, store.CacheEntry{
+		Key:       "boundary",
+		Data:      []byte("v"),
+		TTL:       time.Second,
+		Timestamp: time.Unix(time.Now().Unix()-1, 999_000_000),
+	}))
+
+	got, found, err := cache.Get(ctx, "boundary")
+	require.NoError(t, err)
+	require.True(t, found, "it should still be readable within the rounded up window")
+	assert.Equal(t, []byte("v"), got.Data)
+}

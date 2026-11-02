@@ -46,13 +46,7 @@ func (r *cacheRepository) Get(ctx context.Context, key string) (store.CacheEntry
 	}
 
 	now := time.Now()
-	entry := store.CacheEntry{
-		Key:       key,
-		Data:      data,
-		TTL:       time.Duration(ttl) * time.Second,
-		Timestamp: time.Unix(ts, 0),
-	}
-	if entry.Expired(now) {
+	if expiredAt(ts, ttl, now.Unix()) {
 		if beforeExpiryDelete != nil {
 			beforeExpiryDelete()
 		}
@@ -73,7 +67,19 @@ func (r *cacheRepository) Get(ctx context.Context, key string) (store.CacheEntry
 		}
 		return store.CacheEntry{}, false, nil
 	}
+
+	entry := store.CacheEntry{
+		Key:       key,
+		Data:      data,
+		TTL:       time.Duration(ttl) * time.Second,
+		Timestamp: time.Unix(ts, 0),
+	}
 	return entry, true, nil
+}
+
+// expiredAt reports whether an entry created at ts has expired at nowUnix.
+func expiredAt(ts, ttlSeconds, nowUnix int64) bool {
+	return ttlSeconds > 0 && nowUnix > ts+ttlSeconds
 }
 
 func (r *cacheRepository) Set(ctx context.Context, entry store.CacheEntry) error {
