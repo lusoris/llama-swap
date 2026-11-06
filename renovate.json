@@ -53,6 +53,15 @@
         "patch"
       ],
       "enabled": false
+    },
+    {
+      "description": "npm 12 refuses registry tarballs of bundleDependencies packages while writing the lock file (npm/cli#9800); run the lock file artifact step on npm 11 until that is fixed",
+      "matchManagers": [
+        "npm"
+      ],
+      "constraints": {
+        "npm": ">=11 <12"
+      }
     }
   ]
 }
