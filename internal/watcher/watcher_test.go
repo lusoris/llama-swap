@@ -144,7 +144,7 @@ func TestWatcher_SymlinkTargetSwap(t *testing.T) {
 	// temp name, then rename over the existing one.
 	tmpLink := filepath.Join(dir, "config.yaml.tmp")
 	require.NoError(t, os.Symlink(targetB, tmpLink))
-	require.NoError(t, os.Rename(tmpLink, link))
+	require.NoError(t, renameWithRetry(t, tmpLink, link))
 
 	require.True(t, waitForCount(t, &n, 1, time.Second), "callback should fire after symlink target swap")
 }
@@ -188,4 +188,41 @@ func TestWatcher_ContextCancelStopsRun(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Run did not return within 2s of cancel")
 	}
+}
+
+// renameWithRetry retries os.Rename on Windows due to sharing violation while watcher stats.
+func renameWithRetry(t *testing.T, src, dst string) error {
+	t.Helper()
+	attempts := 1
+	if runtime.GOOS == "windows" {
+		attempts = 20
+	}
+	var err error
+	for i := 0; i < attempts; i++ {
+		err = os.Rename(src, dst)
+		if err == nil {
+			return nil
+		}
+		if i+1 < attempts {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	return err
+}
+
+func TestWatcher_RenameWithRetry(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src.txt")
+	dst := filepath.Join(dir, "dst.txt")
+	require.NoError(t, os.WriteFile(src, []byte("data"), 0o644))
+
+	// Positive: rename succeeds.
+	require.NoError(t, renameWithRetry(t, src, dst))
+	got, err := os.ReadFile(dst)
+	require.NoError(t, err)
+	require.Equal(t, []byte("data"), got)
+
+	// Negative: missing source returns error after attempts without panic.
+	missingSrc := filepath.Join(dir, "missing.txt")
+	require.Error(t, renameWithRetry(t, missingSrc, dst))
 }
