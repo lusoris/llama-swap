@@ -13,6 +13,7 @@ name: Trivy Scan
 jobs:
   trivy:
     runs-on: ubuntu-26.04
+    timeout-minutes: 5
     env:
       TRIVY_VERSION: '0.76.0'
       # sha256 of trivy_0.76.0_Linux-64bit.tar.gz, from the release's
