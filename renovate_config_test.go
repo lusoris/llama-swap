@@ -531,7 +531,7 @@ func TestRenovate_NpmArtifactStepPinnedBelow12(t *testing.T) {
 	})
 }
 
-func checkSemgrepPythonRule(rules []renovatePackageRule) (renovatePackageRule, error) {
+func findMatchingSemgrepPythonRules(rules []renovatePackageRule) []renovatePackageRule {
 	var matching []renovatePackageRule
 	for _, rule := range rules {
 		if slices.Contains(rule.MatchFileNames, ".github/workflows/semgrep.yml") &&
@@ -539,26 +539,43 @@ func checkSemgrepPythonRule(rules []renovatePackageRule) (renovatePackageRule, e
 			matching = append(matching, rule)
 		}
 	}
+	return matching
+}
 
+func validateSemgrepPythonRule(rule renovatePackageRule) error {
+	if rule.AllowedVersions != "<3.15" {
+		return fmt.Errorf("wrong allowedVersions: got %q, want %q", rule.AllowedVersions, "<3.15")
+	}
+	if !slices.Contains(rule.MatchManagers, "github-actions") {
+		return fmt.Errorf("wrong matchManagers: got %v, want github-actions", rule.MatchManagers)
+	}
+	return nil
+}
+
+func detectWrongFileSemgrepPythonRule(rules []renovatePackageRule) error {
+	for _, rule := range rules {
+		if slices.Contains(rule.MatchDepNames, "python") &&
+			!slices.Contains(rule.MatchFileNames, ".github/workflows/semgrep.yml") {
+			return fmt.Errorf("wrong file: rule for python matches %v, want .github/workflows/semgrep.yml", rule.MatchFileNames)
+		}
+	}
+	return nil
+}
+
+func checkSemgrepPythonRule(rules []renovatePackageRule) (renovatePackageRule, error) {
+	matching := findMatchingSemgrepPythonRules(rules)
 	if len(matching) > 1 {
 		return renovatePackageRule{}, fmt.Errorf("duplicate: found %d matching rules", len(matching))
 	}
 	if len(matching) == 1 {
-		rule := matching[0]
-		if rule.AllowedVersions != "<3.15" {
-			return renovatePackageRule{}, fmt.Errorf("wrong allowedVersions: got %q, want %q", rule.AllowedVersions, "<3.15")
+		if err := validateSemgrepPythonRule(matching[0]); err != nil {
+			return renovatePackageRule{}, err
 		}
-		if !slices.Contains(rule.MatchManagers, "github-actions") {
-			return renovatePackageRule{}, fmt.Errorf("wrong matchManagers: got %v, want github-actions", rule.MatchManagers)
-		}
-		return rule, nil
+		return matching[0], nil
 	}
 
-	for _, rule := range rules {
-		if slices.Contains(rule.MatchDepNames, "python") &&
-			!slices.Contains(rule.MatchFileNames, ".github/workflows/semgrep.yml") {
-			return renovatePackageRule{}, fmt.Errorf("wrong file: rule for python matches %v, want .github/workflows/semgrep.yml", rule.MatchFileNames)
-		}
+	if err := detectWrongFileSemgrepPythonRule(rules); err != nil {
+		return renovatePackageRule{}, err
 	}
 
 	return renovatePackageRule{}, fmt.Errorf("no rule found matching file .github/workflows/semgrep.yml and dep python")
@@ -609,6 +626,18 @@ func runSemgrepPythonRuleNegativeCases(t *testing.T) {
 			errContains: "wrong allowedVersions",
 		},
 		{
+			name: "wrong matchManagers",
+			rules: []renovatePackageRule{
+				{
+					MatchManagers:   []string{"npm"},
+					MatchFileNames:  []string{".github/workflows/semgrep.yml"},
+					MatchDepNames:   []string{"python"},
+					AllowedVersions: "<3.15",
+				},
+			},
+			errContains: "wrong matchManagers",
+		},
+		{
 			name:        "duplicate",
 			rules:       []renovatePackageRule{validRule, validRule},
 			errContains: "duplicate",
@@ -656,42 +685,52 @@ func checkPythonVersionBelow315(versionStr string) error {
 	return nil
 }
 
+func testLiveRenovateRuleMatches(t *testing.T) {
+	t.Helper()
+	cfg := loadRenovateConfig(t, "renovate.json")
+	rule, err := checkSemgrepPythonRule(cfg.PackageRules)
+	if err != nil {
+		t.Fatalf("renovate.json rule check failed: %v", err)
+	}
+	if !slices.Contains(rule.MatchFileNames, ".github/workflows/semgrep.yml") {
+		t.Errorf("matchFileNames %v does not contain %q", rule.MatchFileNames, ".github/workflows/semgrep.yml")
+	}
+	if !slices.Contains(rule.MatchDepNames, "python") {
+		t.Errorf("matchDepNames %v does not contain %q", rule.MatchDepNames, "python")
+	}
+	if rule.AllowedVersions != "<3.15" {
+		t.Errorf("allowedVersions = %q; want %q", rule.AllowedVersions, "<3.15")
+	}
+	if !slices.Contains(rule.MatchManagers, "github-actions") {
+		t.Errorf("matchManagers %v does not contain %q", rule.MatchManagers, "github-actions")
+	}
+}
+
+func testWorkflowPythonVersionBelow315(t *testing.T) {
+	t.Helper()
+	content, err := os.ReadFile(".github/workflows/semgrep.yml")
+	if err != nil {
+		t.Fatalf("failed to read .github/workflows/semgrep.yml: %v", err)
+	}
+	verStr, err := parseWorkflowPythonVersion(string(content))
+	if err != nil {
+		t.Fatalf("failed to parse python version: %v", err)
+	}
+	if err := checkPythonVersionBelow315(verStr); err != nil {
+		t.Fatalf("python version check failed: %v", err)
+	}
+}
+
 func TestRenovate_SemgrepWorkflowPythonHeldBelow315(t *testing.T) {
 	t.Run("RuleCheckerNegativeCases", func(t *testing.T) {
 		runSemgrepPythonRuleNegativeCases(t)
 	})
 
 	t.Run("LiveRenovateRuleMatches", func(t *testing.T) {
-		cfg := loadRenovateConfig(t, "renovate.json")
-		rule, err := checkSemgrepPythonRule(cfg.PackageRules)
-		if err != nil {
-			t.Fatalf("renovate.json rule check failed: %v", err)
-		}
-		if !slices.Contains(rule.MatchFileNames, ".github/workflows/semgrep.yml") {
-			t.Errorf("matchFileNames %v does not contain %q", rule.MatchFileNames, ".github/workflows/semgrep.yml")
-		}
-		if !slices.Contains(rule.MatchDepNames, "python") {
-			t.Errorf("matchDepNames %v does not contain %q", rule.MatchDepNames, "python")
-		}
-		if rule.AllowedVersions != "<3.15" {
-			t.Errorf("allowedVersions = %q; want %q", rule.AllowedVersions, "<3.15")
-		}
-		if !slices.Contains(rule.MatchManagers, "github-actions") {
-			t.Errorf("matchManagers %v does not contain %q", rule.MatchManagers, "github-actions")
-		}
+		testLiveRenovateRuleMatches(t)
 	})
 
 	t.Run("WorkflowPythonVersionBelow315", func(t *testing.T) {
-		content, err := os.ReadFile(".github/workflows/semgrep.yml")
-		if err != nil {
-			t.Fatalf("failed to read .github/workflows/semgrep.yml: %v", err)
-		}
-		verStr, err := parseWorkflowPythonVersion(string(content))
-		if err != nil {
-			t.Fatalf("failed to parse python version: %v", err)
-		}
-		if err := checkPythonVersionBelow315(verStr); err != nil {
-			t.Fatalf("python version check failed: %v", err)
-		}
+		testWorkflowPythonVersionBelow315(t)
 	})
 }
