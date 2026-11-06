@@ -1,4 +1,6 @@
-# OSV-Scanner configuration (https://google.github.io/osv-scanner/configuration/).
+# OSV-Scanner configuration for ui/ (https://google.github.io/osv-scanner/configuration/).
+# OSV-Scanner applies a config only to lockfiles in its own folder, so this file
+# sits next to ui/package-lock.json.
 # Every entry is a dated exception: ignoreUntil is entry date plus the interval of its
 # category, and an expired entry no longer suppresses the finding.
 
