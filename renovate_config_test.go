@@ -25,12 +25,14 @@ type renovateCustomManager struct {
 }
 
 type renovatePackageRule struct {
-	Description       string   `json:"description"`
-	MatchFileNames    []string `json:"matchFileNames"`
-	MatchPackageNames []string `json:"matchPackageNames"`
-	MatchDepNames     []string `json:"matchDepNames"`
-	MatchUpdateTypes  []string `json:"matchUpdateTypes"`
-	Enabled           *bool    `json:"enabled"`
+	Description       string            `json:"description"`
+	MatchFileNames    []string          `json:"matchFileNames"`
+	MatchPackageNames []string          `json:"matchPackageNames"`
+	MatchDepNames     []string          `json:"matchDepNames"`
+	MatchUpdateTypes  []string          `json:"matchUpdateTypes"`
+	MatchManagers     []string          `json:"matchManagers"`
+	Constraints       map[string]string `json:"constraints"`
+	Enabled           *bool             `json:"enabled"`
 }
 
 func loadRenovateConfig(t *testing.T, path string) renovateConfig {
@@ -433,5 +435,87 @@ func TestUnifiedDocker_CUDADefaultsMatchBuildScript(t *testing.T) {
 			t.Fatalf("failed to parse script defaults: %v", err)
 		}
 		runCUDADefaultsNegativeCases(t, scriptContent, baseContent, runtimeContent, defaults)
+	})
+}
+
+func checkNpmArtifactStepPinnedBelow12(rules []renovatePackageRule) error {
+	var matchingIndices []int
+	for idx, r := range rules {
+		if slices.Contains(r.MatchManagers, "npm") && r.Constraints != nil && r.Constraints["npm"] == "<12" {
+			matchingIndices = append(matchingIndices, idx)
+		}
+	}
+	if len(matchingIndices) == 0 {
+		return fmt.Errorf("expected exactly one rule with matchManagers containing \"npm\" and constraints[\"npm\"] == \"<12\", found 0")
+	}
+	if len(matchingIndices) > 1 {
+		return fmt.Errorf("expected exactly one rule with matchManagers containing \"npm\" and constraints[\"npm\"] == \"<12\", found %d (rule indices: %v)", len(matchingIndices), matchingIndices)
+	}
+	return nil
+}
+
+func TestRenovate_NpmArtifactStepPinnedBelow12(t *testing.T) {
+	cfg := loadRenovateConfig(t, "renovate.json")
+	if err := checkNpmArtifactStepPinnedBelow12(cfg.PackageRules); err != nil {
+		t.Fatalf("renovate.json: %v", err)
+	}
+
+	t.Run("NegativeCases", func(t *testing.T) {
+		cases := []struct {
+			name  string
+			rules []renovatePackageRule
+		}{
+			{
+				name:  "no_rules",
+				rules: []renovatePackageRule{},
+			},
+			{
+				name: "wrong_manager",
+				rules: []renovatePackageRule{
+					{
+						MatchManagers: []string{"pip"},
+						Constraints:   map[string]string{"npm": "<12"},
+					},
+				},
+			},
+			{
+				name: "wrong_constraint_version",
+				rules: []renovatePackageRule{
+					{
+						MatchManagers: []string{"npm"},
+						Constraints:   map[string]string{"npm": "<11"},
+					},
+				},
+			},
+			{
+				name: "missing_constraint_map",
+				rules: []renovatePackageRule{
+					{
+						MatchManagers: []string{"npm"},
+					},
+				},
+			},
+			{
+				name: "duplicate_rules",
+				rules: []renovatePackageRule{
+					{
+						MatchManagers: []string{"npm"},
+						Constraints:   map[string]string{"npm": "<12"},
+					},
+					{
+						MatchManagers: []string{"npm"},
+						Constraints:   map[string]string{"npm": "<12"},
+					},
+				},
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				if err := checkNpmArtifactStepPinnedBelow12(tc.rules); err == nil {
+					t.Errorf("expected error for negative case %q, got nil", tc.name)
+				}
+			})
+		}
 	})
 }
