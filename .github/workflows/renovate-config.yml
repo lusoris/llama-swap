@@ -5,6 +5,7 @@ on:
     paths:
       - "renovate.json"
       - "docker/unified/build-image.sh"
+      - "docker/unified/*.Dockerfile"
       - "renovate_config_test.go"
       - ".github/workflows/renovate-config.yml"
   push:
@@ -13,6 +14,7 @@ on:
     paths:
       - "renovate.json"
       - "docker/unified/build-image.sh"
+      - "docker/unified/*.Dockerfile"
       - "renovate_config_test.go"
       - ".github/workflows/renovate-config.yml"
 
@@ -46,4 +48,4 @@ jobs:
           go-version-file: go.mod
 
       - name: Run Renovate CUDA manager tests
-        run: go test . -run 'TestRenovateCUDA' -count=1 -v
+        run: go test . -run 'TestRenovate|TestUnifiedDocker' -count=1 -v

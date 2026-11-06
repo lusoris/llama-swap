@@ -313,7 +313,7 @@ from are in `/usr/local/share/audiocpp/licenses/espeak-ng`.
 The CUDA toolkit the projects compile against and the runtime libraries the
 final image ships both come from `nvidia/cuda` images, pinned to the same
 version, so compiled binaries and their runtime libraries always come from the
-same CUDA. The default depends on the variant: `12.9.1` for `--cuda` and
+same CUDA. The default depends on the variant: `12.9.2` for `--cuda` and
 `13.3.1` for `--cuda13`.
 
 The default base images are digest-pinned for reproducible builds. To build
@@ -330,7 +330,7 @@ from `nvcc` altogether and those cards still need an image:
 
 | image | platform | CUDA | `CMAKE_CUDA_ARCHITECTURES` | covers |
 |---|---|---|---|---|
-| `unified-cuda` | amd64 | 12.9.1 | `60;61;70;75;86;89` | Pascal (P100, GTX 10xx, P40), Volta (V100), Turing, Ampere, Ada |
+| `unified-cuda` | amd64 | 12.9.2 | `60;61;70;75;86;89` | Pascal (P100, GTX 10xx, P40), Volta (V100), Turing, Ampere, Ada |
 | `unified-cuda13` | amd64 | 13.3.1 | `80;86;89;90;100;120` | Ampere (A100, RTX 30xx), Ada (RTX 40xx), Hopper (H100), Blackwell (100 on datacenter parts, 120 on GeForce RTX 50xx and RTX PRO) |
 | `unified-cuda13` | arm64 | 13.3.1 | `90;100;120;121` | GB10 (DGX Spark) at 121, GH200 at 90, GB200 at 100, and a discrete GeForce or RTX PRO card in an aarch64 host at 120 |
 

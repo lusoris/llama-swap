@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"regexp"
 	"slices"
@@ -266,4 +267,171 @@ func TestRenovateCUDAPolicyDigestOnly(t *testing.T) {
 	checkRuleDisabled(t, ruleIdx, rule.Enabled)
 	checkUpdateTypesExact(t, ruleIdx, rule.MatchUpdateTypes)
 	checkNoOtherRuleDisablesDigest(t, cfg, ruleIdx)
+}
+
+type unifiedCUDADefaults struct {
+	Version      string
+	DevelImage   string
+	RuntimeImage string
+}
+
+func parseScriptDefaultCUDAVersion(script string) (string, error) {
+	re := regexp.MustCompile(`(?m)^\s*\*\)\s*[\r\n]+\s*CUDA_VERSION="\$\{CUDA_VERSION:-([^"}]+)\}"`)
+	sub := re.FindStringSubmatch(script)
+	if len(sub) < 2 {
+		return "", fmt.Errorf("default CUDA_VERSION in *) branch not found in script")
+	}
+	return sub[1], nil
+}
+
+func parseScriptCUDAImageRefs(script string, version string) (string, string, error) {
+	blockRe, err := regexp.Compile(`(?ms)^\s*` + regexp.QuoteMeta(version) + `\)\s*$(.*?);;`)
+	if err != nil {
+		return "", "", fmt.Errorf("compile version case regex: %w", err)
+	}
+	blockSub := blockRe.FindStringSubmatch(script)
+	if len(blockSub) < 2 {
+		return "", "", fmt.Errorf("case entry for CUDA_VERSION %q not found in script", version)
+	}
+	block := blockSub[1]
+
+	develRe := regexp.MustCompile(`CUDA_DEVEL_IMAGE="\$\{CUDA_DEVEL_IMAGE:-([^"}]+)\}"`)
+	develSub := develRe.FindStringSubmatch(block)
+	if len(develSub) < 2 {
+		return "", "", fmt.Errorf("CUDA_DEVEL_IMAGE for %q not found in script", version)
+	}
+
+	runtimeRe := regexp.MustCompile(`CUDA_RUNTIME_IMAGE="\$\{CUDA_RUNTIME_IMAGE:-([^"}]+)\}"`)
+	runtimeSub := runtimeRe.FindStringSubmatch(block)
+	if len(runtimeSub) < 2 {
+		return "", "", fmt.Errorf("CUDA_RUNTIME_IMAGE for %q not found in script", version)
+	}
+
+	return develSub[1], runtimeSub[1], nil
+}
+
+func parseBuildScriptCUDADefaults(script string) (unifiedCUDADefaults, error) {
+	version, err := parseScriptDefaultCUDAVersion(script)
+	if err != nil {
+		return unifiedCUDADefaults{}, err
+	}
+	devel, runtime, err := parseScriptCUDAImageRefs(script, version)
+	if err != nil {
+		return unifiedCUDADefaults{}, err
+	}
+	return unifiedCUDADefaults{
+		Version:      version,
+		DevelImage:   devel,
+		RuntimeImage: runtime,
+	}, nil
+}
+
+func parseDockerfileArg(content string, argName string) (string, error) {
+	re, err := regexp.Compile(`(?m)^\s*ARG\s+` + regexp.QuoteMeta(argName) + `=([^\s]+)`)
+	if err != nil {
+		return "", err
+	}
+	sub := re.FindStringSubmatch(content)
+	if len(sub) < 2 {
+		return "", fmt.Errorf("ARG %s default not found in Dockerfile", argName)
+	}
+	return sub[1], nil
+}
+
+func verifyUnifiedCUDADefaults(scriptContent, baseDockerfile, runtimeDockerfile string) error {
+	defaults, err := parseBuildScriptCUDADefaults(scriptContent)
+	if err != nil {
+		return fmt.Errorf("parse build-image.sh: %w", err)
+	}
+
+	baseDevel, err := parseDockerfileArg(baseDockerfile, "CUDA_DEVEL_IMAGE")
+	if err != nil {
+		return fmt.Errorf("parse base-cuda.Dockerfile: %w", err)
+	}
+	if baseDevel != defaults.DevelImage {
+		return fmt.Errorf("base-cuda.Dockerfile CUDA_DEVEL_IMAGE = %q; want %q", baseDevel, defaults.DevelImage)
+	}
+
+	runtimeVer, err := parseDockerfileArg(runtimeDockerfile, "CUDA_VERSION")
+	if err != nil {
+		return fmt.Errorf("parse runtime.Dockerfile: %w", err)
+	}
+	if runtimeVer != defaults.Version {
+		return fmt.Errorf("runtime.Dockerfile CUDA_VERSION = %q; want %q", runtimeVer, defaults.Version)
+	}
+
+	runtimeImg, err := parseDockerfileArg(runtimeDockerfile, "CUDA_RUNTIME_IMAGE")
+	if err != nil {
+		return fmt.Errorf("parse runtime.Dockerfile: %w", err)
+	}
+	if runtimeImg != defaults.RuntimeImage {
+		return fmt.Errorf("runtime.Dockerfile CUDA_RUNTIME_IMAGE = %q; want %q", runtimeImg, defaults.RuntimeImage)
+	}
+
+	return nil
+}
+
+func runCUDADefaultsNegativeCases(t *testing.T, scriptContent, baseContent, runtimeContent string, defaults unifiedCUDADefaults) {
+	t.Helper()
+	cases := []struct {
+		name        string
+		script      string
+		base        string
+		runtime     string
+		errContains string
+	}{
+		{
+			name:        "stale_runtime_version",
+			script:      scriptContent,
+			base:        baseContent,
+			runtime:     strings.Replace(runtimeContent, "ARG CUDA_VERSION="+defaults.Version, "ARG CUDA_VERSION=12.9.0", 1),
+			errContains: "runtime.Dockerfile CUDA_VERSION",
+		},
+		{
+			name:        "stale_devel_image",
+			script:      scriptContent,
+			base:        strings.Replace(baseContent, "ARG CUDA_DEVEL_IMAGE="+defaults.DevelImage, "ARG CUDA_DEVEL_IMAGE=nvidia/cuda:stale-devel@sha256:0000", 1),
+			runtime:     runtimeContent,
+			errContains: "base-cuda.Dockerfile CUDA_DEVEL_IMAGE",
+		},
+		{
+			name:        "stale_runtime_image",
+			script:      scriptContent,
+			base:        baseContent,
+			runtime:     strings.Replace(runtimeContent, "ARG CUDA_RUNTIME_IMAGE="+defaults.RuntimeImage, "ARG CUDA_RUNTIME_IMAGE=nvidia/cuda:stale-runtime@sha256:0000", 1),
+			errContains: "runtime.Dockerfile CUDA_RUNTIME_IMAGE",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			checkErr := verifyUnifiedCUDADefaults(tc.script, tc.base, tc.runtime)
+			if checkErr == nil {
+				t.Fatalf("expected error containing %q, got nil", tc.errContains)
+			}
+			if !strings.Contains(checkErr.Error(), tc.errContains) {
+				t.Fatalf("got error %q; want substring %q", checkErr.Error(), tc.errContains)
+			}
+		})
+	}
+}
+
+func TestUnifiedDocker_CUDADefaultsMatchBuildScript(t *testing.T) {
+	scriptContent := readBuildImageScript(t, "docker/unified/build-image.sh")
+	baseContent := readBuildImageScript(t, "docker/unified/base-cuda.Dockerfile")
+	runtimeContent := readBuildImageScript(t, "docker/unified/runtime.Dockerfile")
+
+	t.Run("LiveFilesMatch", func(t *testing.T) {
+		if err := verifyUnifiedCUDADefaults(scriptContent, baseContent, runtimeContent); err != nil {
+			t.Fatalf("live files drift: %v", err)
+		}
+	})
+
+	t.Run("NegativeMismatchDetection", func(t *testing.T) {
+		defaults, err := parseBuildScriptCUDADefaults(scriptContent)
+		if err != nil {
+			t.Fatalf("failed to parse script defaults: %v", err)
+		}
+		runCUDADefaultsNegativeCases(t, scriptContent, baseContent, runtimeContent, defaults)
+	})
 }
