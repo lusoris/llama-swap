@@ -18,6 +18,7 @@ name: Lint
 jobs:
   golangci-lint:
     runs-on: ubuntu-26.04
+    timeout-minutes: 7
     env:
       GOLANGCI_LINT_VERSION: '2.15.0'
       # sha256 of golangci-lint-2.15.0-linux-amd64.tar.gz, from the release's

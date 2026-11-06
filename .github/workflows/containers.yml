@@ -32,6 +32,7 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 18
     strategy:
       matrix:
         platform: [intel, cuda, cuda13, vulkan, cpu, musa, rocm]
@@ -83,6 +84,7 @@ jobs:
   # the referenced digest. dataaxiom/ghcr-cleanup-action walks tagged
   # manifest lists and excludes their children from deletion.
   delete-untagged-containers:
+    timeout-minutes: 5
     needs: build-and-push
     # Skip on forks — the delete API requires package-admin on the
     # upstream account and would otherwise red-x every fork CI run.
