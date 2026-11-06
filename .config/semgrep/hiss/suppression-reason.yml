@@ -1,0 +1,9 @@
+---
+# Every inline gosec suppression names its rule ids and a reason after "--".
+# Fixture: .github/scripts/semgrep-selftest.sh plants one per rule file.
+rules:
+  - id: nosec-without-reason
+    pattern-regex: '#nosec(?!\s+G\d+(,G\d+)*\s+--\s+\S)'
+    message: "a #nosec without rule ids and a reason hides findings nobody judged. fix: write '#nosec G<id> -- <why the finding does not apply>'."
+    languages: [go]
+    severity: ERROR
