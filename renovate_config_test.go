@@ -441,15 +441,15 @@ func TestUnifiedDocker_CUDADefaultsMatchBuildScript(t *testing.T) {
 func checkNpmArtifactStepPinnedBelow12(rules []renovatePackageRule) error {
 	var matchingIndices []int
 	for idx, r := range rules {
-		if slices.Contains(r.MatchManagers, "npm") && r.Constraints != nil && r.Constraints["npm"] == "<12" {
+		if slices.Contains(r.MatchManagers, "npm") && r.Constraints != nil && r.Constraints["npm"] == ">=11 <12" {
 			matchingIndices = append(matchingIndices, idx)
 		}
 	}
 	if len(matchingIndices) == 0 {
-		return fmt.Errorf("expected exactly one rule with matchManagers containing \"npm\" and constraints[\"npm\"] == \"<12\", found 0")
+		return fmt.Errorf("expected exactly one rule with matchManagers containing \"npm\" and constraints[\"npm\"] == \">=11 <12\", found 0")
 	}
 	if len(matchingIndices) > 1 {
-		return fmt.Errorf("expected exactly one rule with matchManagers containing \"npm\" and constraints[\"npm\"] == \"<12\", found %d (rule indices: %v)", len(matchingIndices), matchingIndices)
+		return fmt.Errorf("expected exactly one rule with matchManagers containing \"npm\" and constraints[\"npm\"] == \">=11 <12\", found %d (rule indices: %v)", len(matchingIndices), matchingIndices)
 	}
 	return nil
 }
@@ -474,7 +474,7 @@ func TestRenovate_NpmArtifactStepPinnedBelow12(t *testing.T) {
 				rules: []renovatePackageRule{
 					{
 						MatchManagers: []string{"pip"},
-						Constraints:   map[string]string{"npm": "<12"},
+						Constraints:   map[string]string{"npm": ">=11 <12"},
 					},
 				},
 			},
@@ -500,8 +500,17 @@ func TestRenovate_NpmArtifactStepPinnedBelow12(t *testing.T) {
 				rules: []renovatePackageRule{
 					{
 						MatchManagers: []string{"npm"},
-						Constraints:   map[string]string{"npm": "<12"},
+						Constraints:   map[string]string{"npm": ">=11 <12"},
 					},
+					{
+						MatchManagers: []string{"npm"},
+						Constraints:   map[string]string{"npm": ">=11 <12"},
+					},
+				},
+			},
+			{
+				name: "open_lower_bound",
+				rules: []renovatePackageRule{
 					{
 						MatchManagers: []string{"npm"},
 						Constraints:   map[string]string{"npm": "<12"},
