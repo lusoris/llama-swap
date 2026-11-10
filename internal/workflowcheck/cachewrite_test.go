@@ -45,7 +45,7 @@ func TestWorkflowCheck_PlantedWritesAreReported(t *testing.T) {
 		"run-gha.yml":          "add github.ref",
 		"push-unfiltered.yml":  "set cache: false",
 		"local-action.yml":     "classify ./local in cacheBehaviours",
-		"docker-action.yml":    "classify docker://alpine:3 in cacheBehaviours",
+		"docker-action.yml":    "classify docker://alpine in cacheBehaviours",
 		"push-tags.yml":        "set cache: false",
 		"push-tags-ignore.yml": "set cache: false",
 		"push-ignore.yml":      "set cache: false",
@@ -100,12 +100,20 @@ func fixtureFiles(t *testing.T, kind string) []os.DirEntry {
 
 func checkFixture(t *testing.T, kind, name string) []Finding {
 	t.Helper()
-	path := filepath.Join("testdata", kind, name)
-	data, err := os.ReadFile(path)
+	root, err := os.OpenRoot(filepath.Join("testdata", kind))
 	if err != nil {
 		t.Fatal(err)
 	}
-	findings, err := CheckWorkflow(path, data)
+	t.Cleanup(func() {
+		if err := root.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	data, err := root.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	findings, err := CheckWorkflow(filepath.Join("testdata", kind, name), data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,6 +185,25 @@ func TestWorkflowCheck_DirectoryBoundaries(t *testing.T) {
 	_, _, err = CheckDir(context.Background(), "testdata/missing")
 	if err == nil || errors.Unwrap(err) == nil {
 		t.Fatalf("want wrapped missing directory error, got %v", err)
+	}
+}
+
+func TestWorkflowCheck_SymlinkOutsideDirectoryErrors(t *testing.T) {
+	base := t.TempDir()
+	outside := filepath.Join(base, "outside.yml")
+	if err := os.WriteFile(outside, []byte("on: pull_request\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(base, "workflows")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("..", "outside.yml"), filepath.Join(dir, "escape.yml")); err != nil {
+		t.Skipf("cannot create a symlink on this platform: %v", err)
+	}
+	findings, files, err := CheckDir(context.Background(), dir)
+	if err == nil || files != 0 || len(findings) != 0 {
+		t.Fatalf("symlink out of the directory: files=%d, findings=%v, err=%v", files, findings, err)
 	}
 }
 

@@ -4,7 +4,9 @@ package workflowcheck
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -124,8 +126,23 @@ func checkJob(file string, entry namedNode, workflowGuard bool) ([]Finding, erro
 }
 
 // CheckDir checks sorted YAML workflow files, observing cancellation per file.
+// It reads through an os.Root, so a symlink that leaves dir is an error rather
+// than a file read from elsewhere.
 func CheckDir(ctx context.Context, dir string) (findings []Finding, files int, err error) {
-	entries, err := os.ReadDir(dir)
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, 0, fmt.Errorf("open workflows in %s: %w", dir, err)
+	}
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close workflows in %s: %w", dir, closeErr))
+		}
+	}()
+	return checkRoot(ctx, dir, root)
+}
+
+func checkRoot(ctx context.Context, dir string, root *os.Root) (findings []Finding, files int, err error) {
+	entries, err := fs.ReadDir(root.FS(), ".")
 	if err != nil {
 		return nil, 0, fmt.Errorf("list workflows in %s: %w", dir, err)
 	}
@@ -141,7 +158,7 @@ func CheckDir(ctx context.Context, dir string) (findings []Finding, files int, e
 			return findings, files, fmt.Errorf("check workflow %s: %w", entry.Name(), err)
 		}
 		name := filepath.Join(dir, entry.Name())
-		data, err := os.ReadFile(name)
+		data, err := root.ReadFile(entry.Name())
 		if err != nil {
 			return findings, files, fmt.Errorf("read workflow %s: %w", name, err)
 		}
