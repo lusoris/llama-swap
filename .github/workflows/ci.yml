@@ -68,10 +68,11 @@ jobs:
       # off for the two cache steps alone.
       # yamllint disable rule:line-length
       - name: Restore Go module cache
+        id: restore-gomod
         if: >-
           github.event.pull_request.draft != true &&
           steps.manifest.outputs.present == 'true'
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: ~/go/pkg/mod
           key: gomod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum') }}
@@ -79,16 +80,17 @@ jobs:
             gomod-${{ runner.os }}-${{ runner.arch }}-
 
       # The commit SHA in the key is deliberate. Without it the key is stable,
-      # the restore is an exact hit, and actions/cache skips the save -- so the
-      # entry freezes at the first build and no later run can improve it. With
-      # it every run misses, restores the newest prefix match, and saves what it
-      # actually built. `test` names this job's build cache; give every job in
-      # the repository a different name here.
+      # the restore is an exact hit, and the save step skips -- so the entry
+      # freezes at the first build and no later run can improve it. With it
+      # every run misses and restores the newest prefix match, and a push to
+      # main saves what it built. `test` names this job's build cache; give
+      # every job in the repository a different name here.
       - name: Restore Go build cache
+        id: restore-gobuild
         if: >-
           github.event.pull_request.draft != true &&
           steps.manifest.outputs.present == 'true'
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/go-build
           key: gobuild-${{ runner.os }}-${{ runner.arch }}-test-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
@@ -131,3 +133,26 @@ jobs:
           github.event.pull_request.draft != true &&
           steps.manifest.outputs.present == 'true'
         run: go test -race ./...
+
+      # Only a push to main saves. A cache saved from a pull-request ref is
+      # readable from that ref alone, and one build cache per pull request
+      # pushes main's entries out of the repository's 10 GB cache limit.
+      - name: Save Go module cache
+        if: >-
+          github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+          steps.manifest.outputs.present == 'true' &&
+          steps.restore-gomod.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ steps.restore-gomod.outputs.cache-primary-key }}
+
+      - name: Save Go build cache
+        if: >-
+          github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+          steps.manifest.outputs.present == 'true' &&
+          steps.restore-gobuild.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/go-build
+          key: ${{ steps.restore-gobuild.outputs.cache-primary-key }}

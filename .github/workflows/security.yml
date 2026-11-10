@@ -38,7 +38,8 @@ jobs:
       # off for the two cache steps alone.
       # yamllint disable rule:line-length
       - name: Restore Go module cache
-        uses: actions/cache@v6
+        id: restore-gomod
+        uses: actions/cache/restore@v6
         with:
           path: ~/go/pkg/mod
           key: gomod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum') }}
@@ -48,7 +49,8 @@ jobs:
       # `vulncheck` names this job's build cache and must differ from every
       # other job's.
       - name: Restore Go build cache
-        uses: actions/cache@v6
+        id: restore-gobuild
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/go-build
           key: gobuild-${{ runner.os }}-${{ runner.arch }}-vulncheck-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
@@ -70,3 +72,24 @@ jobs:
         run: govulncheck ./...
       - name: Run gosec
         run: gosec -conf .gosec.json ./...
+
+      # Pull requests restore only; the push to main and the nightly run (on
+      # main) save. See ci.yml: a cache saved from a pull-request ref is
+      # readable from that ref alone and pushes main's entries out.
+      - name: Save Go module cache
+        if: >-
+          github.event_name != 'pull_request' &&
+          steps.restore-gomod.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ steps.restore-gomod.outputs.cache-primary-key }}
+
+      - name: Save Go build cache
+        if: >-
+          github.event_name != 'pull_request' &&
+          steps.restore-gobuild.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/go-build
+          key: ${{ steps.restore-gobuild.outputs.cache-primary-key }}
