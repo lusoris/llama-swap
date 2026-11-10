@@ -1,6 +1,7 @@
 import type { ChatMessage, ContentPart } from "./types";
 import { playgroundSessionHeaders } from "./playgroundSession";
 import { apiUrl } from "./apiPath";
+import { readDecoded } from "./streamRead";
 
 export type Endpoint = "v1/chat/completions" | "v1/messages" | "v1/responses";
 
@@ -369,14 +370,10 @@ export function parseChatCompletionsLine(line: string): StreamChunk | null {
 async function* parseChatCompletionsStream(
   reader: ReadableStreamDefaultReader<Uint8Array>
 ): AsyncGenerator<StreamChunk> {
-  const decoder = new TextDecoder();
   let buffer = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
+  for await (const text of readDecoded(reader)) {
+    buffer += text;
     const lines = buffer.split("\n");
     buffer = lines.pop() || "";
 
@@ -414,20 +411,43 @@ function parseSSEEventBlock(block: string): { event: string; data: string } | nu
   return { event, data: dataLines.join("\n") };
 }
 
+function parseEventJSON(data: string): Record<string, unknown> | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch {
+    return null;
+  }
+  return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown> : null;
+}
+
+function messageEventChunk(event: string, json: Record<string, unknown>): StreamChunk | null {
+  const delta = json.delta as Record<string, unknown> | undefined;
+  if (event === "message_start" || event === "message_delta") {
+    const message = json.message as Record<string, unknown> | undefined;
+    const usage = parseUsageObject(event === "message_start" ? message?.usage : json.usage);
+    const finish_reason = event === "message_delta" ? normalizeAnthropicStopReason(delta?.stop_reason) : undefined;
+    return usage || finish_reason ? { content: "", usage, finish_reason, done: false } : null;
+  }
+  if (event !== "content_block_delta" || !delta) return null;
+  if (delta.type === "text_delta" && delta.text) {
+    return { content: delta.text as string, done: false };
+  }
+  if (delta.type === "thinking_delta" && delta.thinking) {
+    return { content: "", reasoning_content: delta.thinking as string, done: false };
+  }
+  return null;
+}
+
 async function* parseMessagesStream(
   reader: ReadableStreamDefaultReader<Uint8Array>
 ): AsyncGenerator<StreamChunk> {
-  const decoder = new TextDecoder();
   let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
+  for await (const text of readDecoded(reader)) {
+    buffer += text;
     const blocks = buffer.split("\n\n");
     buffer = blocks.pop() || "";
-
     for (const block of blocks) {
       const parsed = parseSSEEventBlock(block);
       if (!parsed) continue;
@@ -435,71 +455,47 @@ async function* parseMessagesStream(
         yield { content: "", done: true };
         return;
       }
-      if (!parsed.data) continue;
-      try {
-        const json = JSON.parse(parsed.data);
-        // Input tokens arrive on message_start; output tokens and the stop
-        // reason on message_delta.
-        if (parsed.event === "message_start" || parsed.event === "message_delta") {
-          const usage = parseUsageObject(parsed.event === "message_start" ? json.message?.usage : json.usage);
-          const finish_reason =
-            parsed.event === "message_delta" ? normalizeAnthropicStopReason(json.delta?.stop_reason) : undefined;
-          if (usage || finish_reason) yield { content: "", usage, finish_reason, done: false };
-          continue;
-        }
-        if (parsed.event !== "content_block_delta") continue;
-        const delta = json.delta;
-        if (!delta) continue;
-        if (delta.type === "text_delta" && delta.text) {
-          yield { content: delta.text, done: false };
-        } else if (delta.type === "thinking_delta" && delta.thinking) {
-          yield { content: "", reasoning_content: delta.thinking, done: false };
-        }
-      } catch {
-        // ignore malformed event
-      }
+      const json = parseEventJSON(parsed.data);
+      if (!json) continue;
+      const chunk = messageEventChunk(parsed.event, json);
+      if (chunk) yield chunk;
     }
   }
+}
+
+function responseEventChunk(event: string, json: Record<string, unknown>): StreamChunk | null {
+  if (event === "response.completed" || event === "response.incomplete" || event === "response.failed") {
+    const response = json.response as Record<string, unknown> | undefined;
+    const usage = parseUsageObject(response?.usage);
+    const finish_reason = normalizeResponsesStop(event, response);
+    return usage || finish_reason ? { content: "", usage, finish_reason, done: false } : null;
+  }
+  if (!json.delta) return null;
+  if (event === "response.output_text.delta") return { content: json.delta as string, done: false };
+  if (event === "response.reasoning_summary_text.delta") {
+    return { content: "", reasoning_content: json.delta as string, done: false };
+  }
+  return null;
 }
 
 async function* parseResponsesStream(
   reader: ReadableStreamDefaultReader<Uint8Array>
 ): AsyncGenerator<StreamChunk> {
-  const decoder = new TextDecoder();
   let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
+  for await (const text of readDecoded(reader)) {
+    buffer += text;
     const blocks = buffer.split("\n\n");
     buffer = blocks.pop() || "";
-
     for (const block of blocks) {
       const parsed = parseSSEEventBlock(block);
       if (!parsed) continue;
-      if (!parsed.data) continue;
-      try {
-        const json = JSON.parse(parsed.data);
-        if (
-          parsed.event === "response.completed" ||
-          parsed.event === "response.incomplete" ||
-          parsed.event === "response.failed"
-        ) {
-          const usage = parseUsageObject(json.response?.usage);
-          const finish_reason = normalizeResponsesStop(parsed.event, json.response);
-          if (usage || finish_reason) yield { content: "", usage, finish_reason, done: false };
-          yield { content: "", done: true };
-          return;
-        }
-        if (parsed.event === "response.output_text.delta" && json.delta) {
-          yield { content: json.delta, done: false };
-        } else if (parsed.event === "response.reasoning_summary_text.delta" && json.delta) {
-          yield { content: "", reasoning_content: json.delta, done: false };
-        }
-      } catch {
-        // ignore malformed event
+      const json = parseEventJSON(parsed.data);
+      if (!json) continue;
+      const chunk = responseEventChunk(parsed.event, json);
+      if (chunk) yield chunk;
+      if (parsed.event === "response.completed" || parsed.event === "response.incomplete" || parsed.event === "response.failed") {
+        yield { content: "", done: true };
+        return;
       }
     }
   }

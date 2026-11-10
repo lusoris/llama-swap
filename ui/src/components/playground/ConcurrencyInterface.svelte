@@ -1,7 +1,7 @@
 <script lang="ts">
   import { playgroundModels, selectorModels } from "../../stores/api";
   import { persistentStore } from "../../stores/persistent";
-  import { streamChatCompletion } from "../../lib/chatApi";
+  import { streamChatCompletion, type StreamChunk } from "../../lib/chatApi";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { Textarea } from "$lib/components/ui/textarea/index.js";
@@ -195,34 +195,60 @@
     };
   }
 
+  function accrue(
+    prev: RunState,
+    now: number,
+    phaseStart: number
+  ): { waitingMs: number; loadingMs: number; reasoningMs: number; contentMs: number } {
+    const delta = now - phaseStart;
+    const base = {
+      waitingMs: prev.waitingMs,
+      loadingMs: prev.loadingMs,
+      reasoningMs: prev.reasoningMs,
+      contentMs: prev.contentMs,
+    };
+    if (prev.phase === "waiting") return { ...base, waitingMs: base.waitingMs + delta };
+    if (prev.phase === "loading") return { ...base, loadingMs: base.loadingMs + delta };
+    if (prev.phase === "reasoning") return { ...base, reasoningMs: base.reasoningMs + delta };
+    if (prev.phase === "content") return { ...base, contentMs: base.contentMs + delta };
+    return base;
+  }
+
+  function applyRunChunk(prev: RunState, chunk: StreamChunk): RunState {
+    let nextPhase: Phase = prev.phase;
+    let loadingText = prev.loadingText;
+    let reasoningContent = prev.reasoningContent;
+    let loadingDone = prev.loadingDone;
+
+    if (chunk.reasoning_content) {
+      const parsed = ingestReasoning(prev, chunk.reasoning_content);
+      loadingText = parsed.loadingText;
+      reasoningContent = parsed.reasoningContent;
+      loadingDone = parsed.loadingDone;
+      nextPhase = parsed.nowPhase;
+    }
+    if (chunk.content) nextPhase = "content";
+
+    return {
+      ...prev,
+      loadingText,
+      reasoningContent,
+      content: prev.content + (chunk.content ?? ""),
+      loadingDone,
+      phase: nextPhase,
+    };
+  }
+
   async function runOne(entry: TestEntry, signal: AbortSignal) {
     const start = performance.now();
     let phaseStart = start;
     runs[entry.id] = { ...emptyRun(), status: "streaming" };
 
-    const accrue = (
-      prev: RunState,
-      now: number
-    ): { waitingMs: number; loadingMs: number; reasoningMs: number; contentMs: number } => {
-      const delta = now - phaseStart;
-      const base = {
-        waitingMs: prev.waitingMs,
-        loadingMs: prev.loadingMs,
-        reasoningMs: prev.reasoningMs,
-        contentMs: prev.contentMs,
-      };
-      if (prev.phase === "waiting") return { ...base, waitingMs: base.waitingMs + delta };
-      if (prev.phase === "loading") return { ...base, loadingMs: base.loadingMs + delta };
-      if (prev.phase === "reasoning") return { ...base, reasoningMs: base.reasoningMs + delta };
-      if (prev.phase === "content") return { ...base, contentMs: base.contentMs + delta };
-      return base;
-    };
-
     const ticker = window.setInterval(() => {
       const prev = runs[entry.id];
       if (!prev || prev.status !== "streaming") return;
       const now = performance.now();
-      const accrued = accrue(prev, now);
+      const accrued = accrue(prev, now, phaseStart);
       phaseStart = now;
       runs[entry.id] = { ...prev, ...accrued, elapsedMs: now - start };
     }, 50);
@@ -237,44 +263,21 @@
         const prev = runs[entry.id];
         if (!prev) break;
         const now = performance.now();
-        const accrued = accrue(prev, now);
+        const accrued = accrue(prev, now, phaseStart);
         phaseStart = now;
 
-        let nextPhase: Phase = prev.phase;
-        let loadingText = prev.loadingText;
-        let reasoningContent = prev.reasoningContent;
-        let loadingDone = prev.loadingDone;
-
-        if (chunk.reasoning_content) {
-          const parsed = ingestReasoning(prev, chunk.reasoning_content);
-          loadingText = parsed.loadingText;
-          reasoningContent = parsed.reasoningContent;
-          loadingDone = parsed.loadingDone;
-          nextPhase = parsed.nowPhase;
-        }
-        if (chunk.content) nextPhase = "content";
-
-        runs[entry.id] = {
-          ...prev,
-          ...accrued,
-          loadingText,
-          reasoningContent,
-          content: prev.content + (chunk.content ?? ""),
-          loadingDone,
-          phase: nextPhase,
-          elapsedMs: now - start,
-        };
+        runs[entry.id] = { ...applyRunChunk(prev, chunk), ...accrued, elapsedMs: now - start };
       }
       const prev = runs[entry.id];
       if (prev) {
         const now = performance.now();
-        const accrued = accrue(prev, now);
+        const accrued = accrue(prev, now, phaseStart);
         runs[entry.id] = { ...prev, ...accrued, status: "done", elapsedMs: now - start };
       }
     } catch (err) {
       const prev = runs[entry.id] ?? emptyRun();
       const now = performance.now();
-      const accrued = accrue(prev, now);
+      const accrued = accrue(prev, now, phaseStart);
       const aborted = err instanceof Error && err.name === "AbortError";
       runs[entry.id] = {
         ...prev,

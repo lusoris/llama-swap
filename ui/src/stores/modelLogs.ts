@@ -1,5 +1,8 @@
 import { writable, type Readable } from "svelte/store";
 import { apiUrl } from "../lib/apiPath";
+import { readDecoded, StreamReadLimitError } from "../lib/streamRead";
+
+export const MAX_LOG_STREAM_READS = 100_000_000;
 
 const LOG_LENGTH_LIMIT = 1024 * 100; /* 100KB of log data */
 
@@ -26,13 +29,9 @@ export function streamModelLog(modelId: string): Readable<string> {
         return;
       }
       const reader = res.body.getReader();
-      const decoder = new TextDecoder();
       let acc = "";
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        acc += decoder.decode(value, { stream: true });
+      for await (const text of readDecoded(reader, MAX_LOG_STREAM_READS)) {
+        acc += text;
         if (acc.length > LOG_LENGTH_LIMIT) {
           acc = acc.slice(-LOG_LENGTH_LIMIT);
         }
@@ -40,6 +39,11 @@ export function streamModelLog(modelId: string): Readable<string> {
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
+      if (err instanceof StreamReadLimitError) {
+        controller?.abort();
+        store.update((text) => text + `\nlog stream stopped after ${MAX_LOG_STREAM_READS} reads; reopen to resume\n`);
+        return;
+      }
       console.error(`Failed to stream logs for ${modelId}:`, err);
       store.set(`Failed to load logs: ${String(err)}\n`);
     }
