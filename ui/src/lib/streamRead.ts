@@ -2,7 +2,7 @@ export const MAX_STREAM_READS = 1_000_000;
 
 export class StreamReadLimitError extends Error {
   constructor(maxReads: number) {
-    super(`stream exceeded ${maxReads} reads`);
+    super(`stream did not end within ${maxReads} reads`);
   }
 }
 
@@ -20,8 +20,7 @@ export async function* readDecoded(
     }
     yield decoder.decode(value, { stream: true });
   }
-  const { done } = await reader.read();
-  if (!done) throw new StreamReadLimitError(maxReads);
-  const tail = decoder.decode();
-  if (tail) yield tail;
+  const error = new StreamReadLimitError(maxReads);
+  await reader.cancel(error);
+  throw error;
 }
