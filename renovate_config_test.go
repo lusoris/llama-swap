@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -24,12 +26,15 @@ type renovateCustomManager struct {
 }
 
 type renovatePackageRule struct {
-	Description       string   `json:"description"`
-	MatchFileNames    []string `json:"matchFileNames"`
-	MatchPackageNames []string `json:"matchPackageNames"`
-	MatchDepNames     []string `json:"matchDepNames"`
-	MatchUpdateTypes  []string `json:"matchUpdateTypes"`
-	Enabled           *bool    `json:"enabled"`
+	Description       string            `json:"description"`
+	MatchFileNames    []string          `json:"matchFileNames"`
+	MatchPackageNames []string          `json:"matchPackageNames"`
+	MatchDepNames     []string          `json:"matchDepNames"`
+	MatchUpdateTypes  []string          `json:"matchUpdateTypes"`
+	MatchManagers     []string          `json:"matchManagers"`
+	Constraints       map[string]string `json:"constraints"`
+	AllowedVersions   string            `json:"allowedVersions"`
+	Enabled           *bool             `json:"enabled"`
 }
 
 func loadRenovateConfig(t *testing.T, path string) renovateConfig {
@@ -266,4 +271,466 @@ func TestRenovateCUDAPolicyDigestOnly(t *testing.T) {
 	checkRuleDisabled(t, ruleIdx, rule.Enabled)
 	checkUpdateTypesExact(t, ruleIdx, rule.MatchUpdateTypes)
 	checkNoOtherRuleDisablesDigest(t, cfg, ruleIdx)
+}
+
+type unifiedCUDADefaults struct {
+	Version      string
+	DevelImage   string
+	RuntimeImage string
+}
+
+func parseScriptDefaultCUDAVersion(script string) (string, error) {
+	re := regexp.MustCompile(`(?m)^\s*\*\)\s*[\r\n]+\s*CUDA_VERSION="\$\{CUDA_VERSION:-([^"}]+)\}"`)
+	sub := re.FindStringSubmatch(script)
+	if len(sub) < 2 {
+		return "", fmt.Errorf("default CUDA_VERSION in *) branch not found in script")
+	}
+	return sub[1], nil
+}
+
+func parseScriptCUDAImageRefs(script string, version string) (string, string, error) {
+	blockRe, err := regexp.Compile(`(?ms)^\s*` + regexp.QuoteMeta(version) + `\)\s*$(.*?);;`)
+	if err != nil {
+		return "", "", fmt.Errorf("compile version case regex: %w", err)
+	}
+	blockSub := blockRe.FindStringSubmatch(script)
+	if len(blockSub) < 2 {
+		return "", "", fmt.Errorf("case entry for CUDA_VERSION %q not found in script", version)
+	}
+	block := blockSub[1]
+
+	develRe := regexp.MustCompile(`CUDA_DEVEL_IMAGE="\$\{CUDA_DEVEL_IMAGE:-([^"}]+)\}"`)
+	develSub := develRe.FindStringSubmatch(block)
+	if len(develSub) < 2 {
+		return "", "", fmt.Errorf("CUDA_DEVEL_IMAGE for %q not found in script", version)
+	}
+
+	runtimeRe := regexp.MustCompile(`CUDA_RUNTIME_IMAGE="\$\{CUDA_RUNTIME_IMAGE:-([^"}]+)\}"`)
+	runtimeSub := runtimeRe.FindStringSubmatch(block)
+	if len(runtimeSub) < 2 {
+		return "", "", fmt.Errorf("CUDA_RUNTIME_IMAGE for %q not found in script", version)
+	}
+
+	return develSub[1], runtimeSub[1], nil
+}
+
+func parseBuildScriptCUDADefaults(script string) (unifiedCUDADefaults, error) {
+	version, err := parseScriptDefaultCUDAVersion(script)
+	if err != nil {
+		return unifiedCUDADefaults{}, err
+	}
+	devel, runtime, err := parseScriptCUDAImageRefs(script, version)
+	if err != nil {
+		return unifiedCUDADefaults{}, err
+	}
+	return unifiedCUDADefaults{
+		Version:      version,
+		DevelImage:   devel,
+		RuntimeImage: runtime,
+	}, nil
+}
+
+func parseDockerfileArg(content string, argName string) (string, error) {
+	re, err := regexp.Compile(`(?m)^\s*ARG\s+` + regexp.QuoteMeta(argName) + `=([^\s]+)`)
+	if err != nil {
+		return "", err
+	}
+	sub := re.FindStringSubmatch(content)
+	if len(sub) < 2 {
+		return "", fmt.Errorf("ARG %s default not found in Dockerfile", argName)
+	}
+	return sub[1], nil
+}
+
+func verifyUnifiedCUDADefaults(scriptContent, baseDockerfile, runtimeDockerfile string) error {
+	defaults, err := parseBuildScriptCUDADefaults(scriptContent)
+	if err != nil {
+		return fmt.Errorf("parse build-image.sh: %w", err)
+	}
+
+	baseDevel, err := parseDockerfileArg(baseDockerfile, "CUDA_DEVEL_IMAGE")
+	if err != nil {
+		return fmt.Errorf("parse base-cuda.Dockerfile: %w", err)
+	}
+	if baseDevel != defaults.DevelImage {
+		return fmt.Errorf("base-cuda.Dockerfile CUDA_DEVEL_IMAGE = %q; want %q", baseDevel, defaults.DevelImage)
+	}
+
+	runtimeVer, err := parseDockerfileArg(runtimeDockerfile, "CUDA_VERSION")
+	if err != nil {
+		return fmt.Errorf("parse runtime.Dockerfile: %w", err)
+	}
+	if runtimeVer != defaults.Version {
+		return fmt.Errorf("runtime.Dockerfile CUDA_VERSION = %q; want %q", runtimeVer, defaults.Version)
+	}
+
+	runtimeImg, err := parseDockerfileArg(runtimeDockerfile, "CUDA_RUNTIME_IMAGE")
+	if err != nil {
+		return fmt.Errorf("parse runtime.Dockerfile: %w", err)
+	}
+	if runtimeImg != defaults.RuntimeImage {
+		return fmt.Errorf("runtime.Dockerfile CUDA_RUNTIME_IMAGE = %q; want %q", runtimeImg, defaults.RuntimeImage)
+	}
+
+	return nil
+}
+
+func runCUDADefaultsNegativeCases(t *testing.T, scriptContent, baseContent, runtimeContent string, defaults unifiedCUDADefaults) {
+	t.Helper()
+	cases := []struct {
+		name        string
+		script      string
+		base        string
+		runtime     string
+		errContains string
+	}{
+		{
+			name:        "stale_runtime_version",
+			script:      scriptContent,
+			base:        baseContent,
+			runtime:     strings.Replace(runtimeContent, "ARG CUDA_VERSION="+defaults.Version, "ARG CUDA_VERSION=12.9.0", 1),
+			errContains: "runtime.Dockerfile CUDA_VERSION",
+		},
+		{
+			name:        "stale_devel_image",
+			script:      scriptContent,
+			base:        strings.Replace(baseContent, "ARG CUDA_DEVEL_IMAGE="+defaults.DevelImage, "ARG CUDA_DEVEL_IMAGE=nvidia/cuda:stale-devel@sha256:0000", 1),
+			runtime:     runtimeContent,
+			errContains: "base-cuda.Dockerfile CUDA_DEVEL_IMAGE",
+		},
+		{
+			name:        "stale_runtime_image",
+			script:      scriptContent,
+			base:        baseContent,
+			runtime:     strings.Replace(runtimeContent, "ARG CUDA_RUNTIME_IMAGE="+defaults.RuntimeImage, "ARG CUDA_RUNTIME_IMAGE=nvidia/cuda:stale-runtime@sha256:0000", 1),
+			errContains: "runtime.Dockerfile CUDA_RUNTIME_IMAGE",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			checkErr := verifyUnifiedCUDADefaults(tc.script, tc.base, tc.runtime)
+			if checkErr == nil {
+				t.Fatalf("expected error containing %q, got nil", tc.errContains)
+			}
+			if !strings.Contains(checkErr.Error(), tc.errContains) {
+				t.Fatalf("got error %q; want substring %q", checkErr.Error(), tc.errContains)
+			}
+		})
+	}
+}
+
+func TestUnifiedDocker_CUDADefaultsMatchBuildScript(t *testing.T) {
+	scriptContent := readBuildImageScript(t, "docker/unified/build-image.sh")
+	baseContent := readBuildImageScript(t, "docker/unified/base-cuda.Dockerfile")
+	runtimeContent := readBuildImageScript(t, "docker/unified/runtime.Dockerfile")
+
+	t.Run("LiveFilesMatch", func(t *testing.T) {
+		if err := verifyUnifiedCUDADefaults(scriptContent, baseContent, runtimeContent); err != nil {
+			t.Fatalf("live files drift: %v", err)
+		}
+	})
+
+	t.Run("NegativeMismatchDetection", func(t *testing.T) {
+		defaults, err := parseBuildScriptCUDADefaults(scriptContent)
+		if err != nil {
+			t.Fatalf("failed to parse script defaults: %v", err)
+		}
+		runCUDADefaultsNegativeCases(t, scriptContent, baseContent, runtimeContent, defaults)
+	})
+}
+
+func checkNpmArtifactStepPinnedBelow12(rules []renovatePackageRule) error {
+	var matchingIndices []int
+	for idx, r := range rules {
+		if slices.Contains(r.MatchManagers, "npm") && r.Constraints != nil && r.Constraints["npm"] == ">=11 <12" {
+			matchingIndices = append(matchingIndices, idx)
+		}
+	}
+	if len(matchingIndices) == 0 {
+		return fmt.Errorf("expected exactly one rule with matchManagers containing \"npm\" and constraints[\"npm\"] == \">=11 <12\", found 0")
+	}
+	if len(matchingIndices) > 1 {
+		return fmt.Errorf("expected exactly one rule with matchManagers containing \"npm\" and constraints[\"npm\"] == \">=11 <12\", found %d (rule indices: %v)", len(matchingIndices), matchingIndices)
+	}
+	return nil
+}
+
+func TestRenovate_NpmArtifactStepPinnedBelow12(t *testing.T) {
+	cfg := loadRenovateConfig(t, "renovate.json")
+	if err := checkNpmArtifactStepPinnedBelow12(cfg.PackageRules); err != nil {
+		t.Fatalf("renovate.json: %v", err)
+	}
+
+	t.Run("NegativeCases", func(t *testing.T) {
+		cases := []struct {
+			name  string
+			rules []renovatePackageRule
+		}{
+			{
+				name:  "no_rules",
+				rules: []renovatePackageRule{},
+			},
+			{
+				name: "wrong_manager",
+				rules: []renovatePackageRule{
+					{
+						MatchManagers: []string{"pip"},
+						Constraints:   map[string]string{"npm": ">=11 <12"},
+					},
+				},
+			},
+			{
+				name: "wrong_constraint_version",
+				rules: []renovatePackageRule{
+					{
+						MatchManagers: []string{"npm"},
+						Constraints:   map[string]string{"npm": "<11"},
+					},
+				},
+			},
+			{
+				name: "missing_constraint_map",
+				rules: []renovatePackageRule{
+					{
+						MatchManagers: []string{"npm"},
+					},
+				},
+			},
+			{
+				name: "duplicate_rules",
+				rules: []renovatePackageRule{
+					{
+						MatchManagers: []string{"npm"},
+						Constraints:   map[string]string{"npm": ">=11 <12"},
+					},
+					{
+						MatchManagers: []string{"npm"},
+						Constraints:   map[string]string{"npm": ">=11 <12"},
+					},
+				},
+			},
+			{
+				name: "open_lower_bound",
+				rules: []renovatePackageRule{
+					{
+						MatchManagers: []string{"npm"},
+						Constraints:   map[string]string{"npm": "<12"},
+					},
+				},
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				if err := checkNpmArtifactStepPinnedBelow12(tc.rules); err == nil {
+					t.Errorf("expected error for negative case %q, got nil", tc.name)
+				}
+			})
+		}
+	})
+}
+
+func findMatchingSemgrepPythonRules(rules []renovatePackageRule) []renovatePackageRule {
+	var matching []renovatePackageRule
+	for _, rule := range rules {
+		if slices.Contains(rule.MatchFileNames, ".github/workflows/semgrep.yml") &&
+			slices.Contains(rule.MatchDepNames, "python") {
+			matching = append(matching, rule)
+		}
+	}
+	return matching
+}
+
+func validateSemgrepPythonRule(rule renovatePackageRule) error {
+	if rule.AllowedVersions != "<3.15" {
+		return fmt.Errorf("wrong allowedVersions: got %q, want %q", rule.AllowedVersions, "<3.15")
+	}
+	if !slices.Contains(rule.MatchManagers, "github-actions") {
+		return fmt.Errorf("wrong matchManagers: got %v, want github-actions", rule.MatchManagers)
+	}
+	return nil
+}
+
+func detectWrongFileSemgrepPythonRule(rules []renovatePackageRule) error {
+	for _, rule := range rules {
+		if slices.Contains(rule.MatchDepNames, "python") &&
+			!slices.Contains(rule.MatchFileNames, ".github/workflows/semgrep.yml") {
+			return fmt.Errorf("wrong file: rule for python matches %v, want .github/workflows/semgrep.yml", rule.MatchFileNames)
+		}
+	}
+	return nil
+}
+
+func checkSemgrepPythonRule(rules []renovatePackageRule) (renovatePackageRule, error) {
+	matching := findMatchingSemgrepPythonRules(rules)
+	if len(matching) > 1 {
+		return renovatePackageRule{}, fmt.Errorf("duplicate: found %d matching rules", len(matching))
+	}
+	if len(matching) == 1 {
+		if err := validateSemgrepPythonRule(matching[0]); err != nil {
+			return renovatePackageRule{}, err
+		}
+		return matching[0], nil
+	}
+
+	if err := detectWrongFileSemgrepPythonRule(rules); err != nil {
+		return renovatePackageRule{}, err
+	}
+
+	return renovatePackageRule{}, fmt.Errorf("no rule found matching file .github/workflows/semgrep.yml and dep python")
+}
+
+func runSemgrepPythonRuleNegativeCases(t *testing.T) {
+	t.Helper()
+	validRule := renovatePackageRule{
+		Description:     "hold semgrep python",
+		MatchManagers:   []string{"github-actions"},
+		MatchFileNames:  []string{".github/workflows/semgrep.yml"},
+		MatchDepNames:   []string{"python"},
+		AllowedVersions: "<3.15",
+	}
+
+	cases := []struct {
+		name        string
+		rules       []renovatePackageRule
+		errContains string
+	}{
+		{
+			name:        "no rule",
+			rules:       []renovatePackageRule{},
+			errContains: "no rule",
+		},
+		{
+			name: "wrong file",
+			rules: []renovatePackageRule{
+				{
+					MatchManagers:   []string{"github-actions"},
+					MatchFileNames:  []string{".github/workflows/ci.yml"},
+					MatchDepNames:   []string{"python"},
+					AllowedVersions: "<3.15",
+				},
+			},
+			errContains: "wrong file",
+		},
+		{
+			name: "wrong allowedVersions",
+			rules: []renovatePackageRule{
+				{
+					MatchManagers:   []string{"github-actions"},
+					MatchFileNames:  []string{".github/workflows/semgrep.yml"},
+					MatchDepNames:   []string{"python"},
+					AllowedVersions: "<3.14",
+				},
+			},
+			errContains: "wrong allowedVersions",
+		},
+		{
+			name: "wrong matchManagers",
+			rules: []renovatePackageRule{
+				{
+					MatchManagers:   []string{"npm"},
+					MatchFileNames:  []string{".github/workflows/semgrep.yml"},
+					MatchDepNames:   []string{"python"},
+					AllowedVersions: "<3.15",
+				},
+			},
+			errContains: "wrong matchManagers",
+		},
+		{
+			name:        "duplicate",
+			rules:       []renovatePackageRule{validRule, validRule},
+			errContains: "duplicate",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := checkSemgrepPythonRule(tc.rules)
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tc.errContains)
+			}
+			if !strings.Contains(err.Error(), tc.errContains) {
+				t.Fatalf("got error %q; want substring %q", err.Error(), tc.errContains)
+			}
+		})
+	}
+}
+
+func parseWorkflowPythonVersion(workflowContent string) (string, error) {
+	re := regexp.MustCompile(`(?m)^\s*python-version:\s*['"]?([^'"\r\n]+)['"]?`)
+	sub := re.FindStringSubmatch(workflowContent)
+	if len(sub) < 2 {
+		return "", fmt.Errorf("python-version line not found in workflow")
+	}
+	return sub[1], nil
+}
+
+func checkPythonVersionBelow315(versionStr string) error {
+	parts := strings.Split(versionStr, ".")
+	if len(parts) < 2 {
+		return fmt.Errorf("python version %q cannot be parsed as major.minor", versionStr)
+	}
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return fmt.Errorf("invalid major version in %q: %w", versionStr, err)
+	}
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return fmt.Errorf("invalid minor version in %q: %w", versionStr, err)
+	}
+	if major > 3 || (major == 3 && minor >= 15) {
+		return fmt.Errorf("python version %q is not below 3.15", versionStr)
+	}
+	return nil
+}
+
+func testLiveRenovateRuleMatches(t *testing.T) {
+	t.Helper()
+	cfg := loadRenovateConfig(t, "renovate.json")
+	rule, err := checkSemgrepPythonRule(cfg.PackageRules)
+	if err != nil {
+		t.Fatalf("renovate.json rule check failed: %v", err)
+	}
+	if !slices.Contains(rule.MatchFileNames, ".github/workflows/semgrep.yml") {
+		t.Errorf("matchFileNames %v does not contain %q", rule.MatchFileNames, ".github/workflows/semgrep.yml")
+	}
+	if !slices.Contains(rule.MatchDepNames, "python") {
+		t.Errorf("matchDepNames %v does not contain %q", rule.MatchDepNames, "python")
+	}
+	if rule.AllowedVersions != "<3.15" {
+		t.Errorf("allowedVersions = %q; want %q", rule.AllowedVersions, "<3.15")
+	}
+	if !slices.Contains(rule.MatchManagers, "github-actions") {
+		t.Errorf("matchManagers %v does not contain %q", rule.MatchManagers, "github-actions")
+	}
+}
+
+func testWorkflowPythonVersionBelow315(t *testing.T) {
+	t.Helper()
+	content, err := os.ReadFile(".github/workflows/semgrep.yml")
+	if err != nil {
+		t.Fatalf("failed to read .github/workflows/semgrep.yml: %v", err)
+	}
+	verStr, err := parseWorkflowPythonVersion(string(content))
+	if err != nil {
+		t.Fatalf("failed to parse python version: %v", err)
+	}
+	if err := checkPythonVersionBelow315(verStr); err != nil {
+		t.Fatalf("python version check failed: %v", err)
+	}
+}
+
+func TestRenovate_SemgrepWorkflowPythonHeldBelow315(t *testing.T) {
+	t.Run("RuleCheckerNegativeCases", func(t *testing.T) {
+		runSemgrepPythonRuleNegativeCases(t)
+	})
+
+	t.Run("LiveRenovateRuleMatches", func(t *testing.T) {
+		testLiveRenovateRuleMatches(t)
+	})
+
+	t.Run("WorkflowPythonVersionBelow315", func(t *testing.T) {
+		testWorkflowPythonVersionBelow315(t)
+	})
 }

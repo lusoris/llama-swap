@@ -53,6 +53,28 @@
         "patch"
       ],
       "enabled": false
+    },
+    {
+      "description": "npm 12 refuses registry tarballs of bundleDependencies packages while writing the lock file (npm/cli#9800); run the lock file artifact step on npm 11 until that is fixed",
+      "matchManagers": [
+        "npm"
+      ],
+      "constraints": {
+        "npm": ">=11 <12"
+      }
+    },
+    {
+      "description": "semgrep publishes support up to Python 3.14 and semgrep-core crashes on 3.15; hold the semgrep workflow's Python below 3.15 until a semgrep release lists 3.15",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchFileNames": [
+        ".github/workflows/semgrep.yml"
+      ],
+      "matchDepNames": [
+        "python"
+      ],
+      "allowedVersions": "<3.15"
     }
   ]
 }

@@ -5,6 +5,7 @@ on:
     paths:
       - "renovate.json"
       - "docker/unified/build-image.sh"
+      - "docker/unified/*.Dockerfile"
       - "renovate_config_test.go"
       - ".github/workflows/renovate-config.yml"
   push:
@@ -13,6 +14,7 @@ on:
     paths:
       - "renovate.json"
       - "docker/unified/build-image.sh"
+      - "docker/unified/*.Dockerfile"
       - "renovate_config_test.go"
       - ".github/workflows/renovate-config.yml"
 
@@ -24,6 +26,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     container:
       image: ghcr.io/renovatebot/renovate:44.200.0@sha256:8639eca545119147ce9114c22315129dd52794b3ea8a6767f8b0bd22606545c4
       options: --user root
@@ -36,6 +39,7 @@ jobs:
 
   manager-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -46,4 +50,4 @@ jobs:
           go-version-file: go.mod
 
       - name: Run Renovate CUDA manager tests
-        run: go test . -run 'TestRenovateCUDA' -count=1 -v
+        run: go test . -run 'TestRenovate|TestUnifiedDocker' -count=1 -v

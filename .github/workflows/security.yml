@@ -22,6 +22,7 @@ name: Security Scan
 jobs:
   vulncheck:
     runs-on: ubuntu-26.04
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7

@@ -5,7 +5,7 @@
 # That is what lets an artifacts image be keyed on this base's tag plus the
 # project's own two files, with nothing to infer from a shared Dockerfile.
 
-ARG CUDA_DEVEL_IMAGE=nvidia/cuda:12.9.1-devel-ubuntu24.04@sha256:020bc241a628776338f4d4053fed4c38f6f7f3d7eb5919fecb8de313bb8ba47c
+ARG CUDA_DEVEL_IMAGE=nvidia/cuda:12.9.2-devel-ubuntu24.04@sha256:16656a1ef115bca9e1f820c6349876f1486d2b3c9a0e615773799fe402960dc5
 FROM ${CUDA_DEVEL_IMAGE}
 
 # Compute capabilities compiled as SASS, shared by every CUDA build.

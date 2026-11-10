@@ -2,6 +2,8 @@ package configwatcher
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -144,7 +146,7 @@ func TestWatcher_SymlinkTargetSwap(t *testing.T) {
 	// temp name, then rename over the existing one.
 	tmpLink := filepath.Join(dir, "config.yaml.tmp")
 	require.NoError(t, os.Symlink(targetB, tmpLink))
-	require.NoError(t, os.Rename(tmpLink, link))
+	require.NoError(t, renameWithRetry(t, tmpLink, link))
 
 	require.True(t, waitForCount(t, &n, 1, time.Second), "callback should fire after symlink target swap")
 }
@@ -187,5 +189,104 @@ func TestWatcher_ContextCancelStopsRun(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("Run did not return within 2s of cancel")
+	}
+}
+
+// retryRename retries rename up to attempts times with delay between attempts.
+func retryRename(rename func(src, dst string) error, attempts int, delay time.Duration, src, dst string) error {
+	var err error
+	for i := 0; i < attempts; i++ {
+		err = rename(src, dst)
+		if err == nil {
+			return nil
+		}
+		if i+1 < attempts && delay > 0 {
+			time.Sleep(delay)
+		}
+	}
+	return err
+}
+
+// renameWithRetry retries os.Rename on Windows due to sharing violation while watcher stats.
+func renameWithRetry(t *testing.T, src, dst string) error {
+	t.Helper()
+	attempts := 1
+	if runtime.GOOS == "windows" {
+		attempts = 20
+	}
+	return retryRename(os.Rename, attempts, 10*time.Millisecond, src, dst)
+}
+
+func TestWatcher_RenameWithRetry(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src.txt")
+	dst := filepath.Join(dir, "dst.txt")
+	require.NoError(t, os.WriteFile(src, []byte("data"), 0o644))
+
+	// Positive: rename succeeds.
+	require.NoError(t, renameWithRetry(t, src, dst))
+	dstInfo, err := os.Stat(dst)
+	require.NoError(t, err)
+	require.Equal(t, int64(4), dstInfo.Size())
+	_, err = os.Stat(src)
+	require.Error(t, err)
+	require.True(t, os.IsNotExist(err))
+	require.True(t, errors.Is(err, fs.ErrNotExist))
+
+	// Negative: missing source returns error after attempts without panic.
+	missingSrc := filepath.Join(dir, "missing.txt")
+	require.Error(t, renameWithRetry(t, missingSrc, dst))
+}
+
+func TestWatcher_RetryRename(t *testing.T) {
+	tests := []struct {
+		name      string
+		attempts  int
+		failTimes int
+		wantCalls int
+		wantErr   bool
+	}{
+		{
+			name:      "fails twice then succeeds",
+			attempts:  5,
+			failTimes: 2,
+			wantCalls: 3,
+			wantErr:   false,
+		},
+		{
+			name:      "always fails",
+			attempts:  3,
+			failTimes: -1,
+			wantCalls: 3,
+			wantErr:   true,
+		},
+		{
+			name:      "single attempt fails",
+			attempts:  1,
+			failTimes: -1,
+			wantCalls: 1,
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			calls := 0
+			fakeRename := func(src, dst string) error {
+				calls++
+				if tt.failTimes >= 0 && calls > tt.failTimes {
+					return nil
+				}
+				return errors.New("simulated rename error")
+			}
+
+			err := retryRename(fakeRename, tt.attempts, 0, "src", "dst")
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.wantCalls, calls)
+		})
 	}
 }

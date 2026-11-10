@@ -18,6 +18,7 @@ permissions:
 jobs:
   snapshot:
     runs-on: ubuntu-26.04
+    timeout-minutes: 16
     steps:
       - name: Stop on a draft pull request
         if: github.event.pull_request.draft == true

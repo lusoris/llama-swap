@@ -32,6 +32,7 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 18
     strategy:
       matrix:
         platform: [intel, cuda, cuda13, vulkan, cpu, musa, rocm]
@@ -58,13 +59,13 @@ jobs:
       # no-op for amd64-only builds, so leaving it on for every matrix
       # entry keeps the workflow simple.
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a #v4.0.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd #v4.0.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 #v4.1.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -83,6 +84,7 @@ jobs:
   # the referenced digest. dataaxiom/ghcr-cleanup-action walks tagged
   # manifest lists and excludes their children from deletion.
   delete-untagged-containers:
+    timeout-minutes: 5
     needs: build-and-push
     # Skip on forks — the delete API requires package-admin on the
     # upstream account and would otherwise red-x every fork CI run.

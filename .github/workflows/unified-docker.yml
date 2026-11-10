@@ -94,6 +94,7 @@ permissions:
 jobs:
   setup:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       build_cuda: ${{ steps.plan.outputs.build_cuda }}
       build_cuda13: ${{ steps.plan.outputs.build_cuda13 }}

@@ -141,7 +141,7 @@ for arg in "$@"; do
             echo "                       80;86;89;90;100;120 for --cuda13 on amd64,"
             echo "                       90;100;120;121 for --cuda13 on arm64)"
             echo "  CUDA_VERSION         CUDA toolkit/runtime version as an nvidia/cuda image tag"
-            echo "                       (default: 12.9.1 for --cuda, 13.3.1 for --cuda13)"
+            echo "                       (default: 12.9.2 for --cuda, 13.3.1 for --cuda13)"
             echo "  CUDA_DEVEL_IMAGE     nvidia/cuda devel base image pinned by digest (@sha256:...)"
             echo "  CUDA_RUNTIME_IMAGE   nvidia/cuda runtime base image pinned by digest (@sha256:...)"
             echo "  DATE_TAG             Date suffix for published tags (default: today, UTC)"
@@ -229,7 +229,7 @@ case "${VARIANT}:${ARCH}" in
         CMAKE_CUDA_ARCHITECTURES="${CMAKE_CUDA_ARCHITECTURES:-80;86;89;90;100;120}"
         ;;
     *)
-        CUDA_VERSION="${CUDA_VERSION:-12.9.1}"
+        CUDA_VERSION="${CUDA_VERSION:-12.9.2}"
         CMAKE_CUDA_ARCHITECTURES="${CMAKE_CUDA_ARCHITECTURES:-60;61;70;75;86;89}"
         ;;
 esac
@@ -241,7 +241,7 @@ DATE_TAG="${DATE_TAG:-$(date -u +%Y-%m-%d)}"
 # The value becomes part of nvidia/cuda image tags, so a bad version should
 # fail here with a clear message rather than a docker "image not found".
 if [[ "$BACKEND" == "cuda" && ! "$CUDA_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-    echo "ERROR: CUDA_VERSION '${CUDA_VERSION}' is not a valid nvidia/cuda version (e.g., 12.9.1)" >&2
+    echo "ERROR: CUDA_VERSION '${CUDA_VERSION}' is not a valid nvidia/cuda version (e.g., 12.9.2)" >&2
     exit 1
 fi
 
@@ -251,9 +251,9 @@ CUDA_RUNTIME_IMAGE="${CUDA_RUNTIME_IMAGE:-}"
 if [[ "$BACKEND" == "cuda" ]]; then
     if [[ -z "${CUDA_DEVEL_IMAGE}" || -z "${CUDA_RUNTIME_IMAGE}" ]]; then
         case "${CUDA_VERSION}" in
-            12.9.1)
-                CUDA_DEVEL_IMAGE="${CUDA_DEVEL_IMAGE:-nvidia/cuda:12.9.1-devel-ubuntu24.04@sha256:020bc241a628776338f4d4053fed4c38f6f7f3d7eb5919fecb8de313bb8ba47c}"
-                CUDA_RUNTIME_IMAGE="${CUDA_RUNTIME_IMAGE:-nvidia/cuda:12.9.1-runtime-ubuntu24.04@sha256:1287141d283b8f06f45681b56a48a85791398c615888b1f96bfb9fc981392d98}"
+            12.9.2)
+                CUDA_DEVEL_IMAGE="${CUDA_DEVEL_IMAGE:-nvidia/cuda:12.9.2-devel-ubuntu24.04@sha256:16656a1ef115bca9e1f820c6349876f1486d2b3c9a0e615773799fe402960dc5}"
+                CUDA_RUNTIME_IMAGE="${CUDA_RUNTIME_IMAGE:-nvidia/cuda:12.9.2-runtime-ubuntu24.04@sha256:6d2a0dabc50c3bf14d27fc66822b6b1f94a325807ace17bd1997762307790587}"
                 ;;
             13.3.1)
                 CUDA_DEVEL_IMAGE="${CUDA_DEVEL_IMAGE:-nvidia/cuda:13.3.1-devel-ubuntu24.04@sha256:4ff859525f99de5782aa73607ce24219b07dddd48d12b97c1c301d7e1cfb0a87}"

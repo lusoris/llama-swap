@@ -52,6 +52,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       # Full history and tags: the ref input may name a tag, a branch or a
       # commit (including a short SHA), and a shallow clone cannot resolve
@@ -124,7 +125,7 @@ jobs:
           echo "chart-version=${VER}.0.0" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 #v4.1.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
