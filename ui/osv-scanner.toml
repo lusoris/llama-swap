@@ -6,5 +6,5 @@
 
 [[IgnoredVulns]]
 id = "GHSA-gcqx-w48m-w2h4"
-ignoreUntil = 2026-11-10
-reason = "Category C (10 days from 2026-10-31). deepmerge 4.3.1, prototype poisoning in mergeObject (low), no patched release (latest is 4.3.1); reached only through @sveltejs/vite-plugin-svelte 7.0.0 (latest 7.3.1 still requires deepmerge ^4.3.1), a build-time devDependency of ui/ (ui/package-lock.json), never shipped to a browser. Re-check when vite-plugin-svelte drops or bumps deepmerge, or a patched deepmerge appears."
+ignoreUntil = 2026-11-20
+reason = "Category C (10 days from 2026-11-10), renewal 1 (first entry 2026-10-31). deepmerge 4.3.1, prototype poisoning in mergeObject (low); reached only through @sveltejs/vite-plugin-svelte 7.3.1 (locked), a build-time devDependency of ui/ (ui/package-lock.json), never shipped to a browser. Re-checked 2026-11-10: deepmerge latest 4.3.1 (no patched release), vite-plugin-svelte latest 7.3.1 still requires deepmerge ^4.3.1. At 2026-11-20: patched deepmerge -> bump ui/package-lock.json and drop this entry; none -> renewal needs a recorded decision."
