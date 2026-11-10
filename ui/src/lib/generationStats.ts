@@ -67,22 +67,11 @@ function perSecond(tokens: number | undefined, ms: number | undefined): number |
  * generation clock after it. Once the turn is done they stop at the last token.
  */
 export function currentStats(tracker: GenerationTracker, now: number, streaming: boolean): GenerationStats {
-  const { usage, startedAt, firstTokenAt, lastTokenAt, answerStartedAt, reasoningChunks, answerChunks } = tracker;
+  const { usage, startedAt, firstTokenAt, lastTokenAt, reasoningChunks, answerChunks } = tracker;
   const chunks = reasoningChunks + answerChunks;
   const end = streaming ? now : (lastTokenAt ?? now);
 
-  const prompt: PhaseStats = { approxTokens: false, approxTimings: usage.prompt_ms === undefined };
-  if (usage.prompt_tokens !== undefined) prompt.tokens = usage.prompt_tokens;
-  if (usage.prompt_ms !== undefined) {
-    prompt.ms = usage.prompt_ms;
-  } else if (firstTokenAt !== undefined) {
-    prompt.ms = firstTokenAt - startedAt;
-  } else if (streaming) {
-    prompt.ms = now - startedAt;
-  }
-  if (prompt.tokens !== undefined) {
-    prompt.perSecond = perSecond(prompt.tokens - (usage.cached_tokens ?? 0), prompt.ms);
-  }
+  const prompt = promptStats(tracker, now, streaming);
 
   const generation: PhaseStats = {
     approxTokens: usage.completion_tokens === undefined,
@@ -118,6 +107,32 @@ export function currentStats(tracker: GenerationTracker, now: number, streaming:
   if (tracker.contextLength) stats.contextLength = tracker.contextLength;
   if (reasoningChunks === 0 || firstTokenAt === undefined) return stats;
 
+  return addReasoningStats(stats, tracker, end);
+}
+
+function promptStats(tracker: GenerationTracker, now: number, streaming: boolean): PhaseStats {
+  const { usage, firstTokenAt, startedAt } = tracker;
+  const prompt: PhaseStats = { approxTokens: false, approxTimings: usage.prompt_ms === undefined };
+  if (usage.prompt_tokens !== undefined) prompt.tokens = usage.prompt_tokens;
+  if (usage.prompt_ms !== undefined) {
+    prompt.ms = usage.prompt_ms;
+  } else if (firstTokenAt !== undefined) {
+    prompt.ms = firstTokenAt - startedAt;
+  } else if (streaming) {
+    prompt.ms = now - startedAt;
+  }
+  if (prompt.tokens !== undefined) {
+    prompt.perSecond = perSecond(prompt.tokens - (usage.cached_tokens ?? 0), prompt.ms);
+  }
+
+  return prompt;
+}
+
+function addReasoningStats(stats: GenerationStats, tracker: GenerationTracker, end: number): GenerationStats {
+  const { usage, reasoningChunks, answerChunks, answerStartedAt, firstTokenAt } = tracker;
+  const chunks = reasoningChunks + answerChunks;
+  const generation = stats.generation;
+  if (firstTokenAt === undefined) return stats;
   // Still thinking, or the turn ended without an answer: thinking is all of it.
   if (answerChunks === 0 || answerStartedAt === undefined) {
     stats.reasoning = { ...generation };

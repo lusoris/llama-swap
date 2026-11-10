@@ -340,3 +340,60 @@ describe("api store event handling", () => {
     await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
   });
 });
+
+it("queues exactly one Playground refresh for two callers during a fetch", async () => {
+  let resolve!: (value: Response) => void;
+  const pending = new Promise<Response>((done) => { resolve = done; });
+  const response = { ok: true, json: async () => ({ data: [] }) } as unknown as Response;
+  const mockFetch = vi.fn().mockReturnValueOnce(pending).mockResolvedValue(response);
+  vi.stubGlobal("fetch", mockFetch);
+  const first = fetchPlaygroundModels();
+  expect(fetchPlaygroundModels()).toBe(first);
+  expect(fetchPlaygroundModels()).toBe(first);
+  resolve(response);
+  await first;
+  await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+});
+
+it("runs a queued Playground refresh even when the fetch rejects", async () => {
+  let reject!: (error: Error) => void;
+  const pending = new Promise<Response>((_, fail) => { reject = fail; });
+  const mockFetch = vi.fn().mockReturnValueOnce(pending).mockResolvedValue({
+    ok: true, json: async () => ({ data: [] }),
+  });
+  const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  try {
+    vi.stubGlobal("fetch", mockFetch);
+    const first = fetchPlaygroundModels();
+    expect(fetchPlaygroundModels()).toBe(first);
+    reject(new Error("network failed"));
+    await first;
+    await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+  } finally {
+    errorLog.mockRestore();
+  }
+});
+
+it("reports the queued Playground refresh bound visibly", async () => {
+  let loads = 0;
+  const mockFetch = vi.fn().mockImplementation(async () => ({
+    ok: true,
+    json: async () => {
+      loads++;
+      if (loads < 10) void fetchPlaygroundModels();
+      return { data: [] };
+    },
+  }));
+  const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  try {
+    vi.stubGlobal("fetch", mockFetch);
+    await fetchPlaygroundModels();
+    await vi.waitFor(() => expect(errorLog).toHaveBeenCalledWith(
+      "Failed to refresh Playground models:",
+      expect.objectContaining({ message: expect.stringContaining("MAX_QUEUED_PLAYGROUND_REFRESHES (8)") })
+    ));
+    expect(mockFetch).toHaveBeenCalledTimes(8);
+  } finally {
+    errorLog.mockRestore();
+  }
+});

@@ -58,20 +58,29 @@ let playgroundModelsRequest = 0;
 let playgroundModelsFetch: Promise<Model[]> | null = null;
 let playgroundModelsRefreshQueued = false;
 
+function resetAPIState(connected: boolean): void {
+  if (connected) {
+    activityRevision.update((n) => n + 1);
+  } else {
+    activityRevision.set(0);
+  }
+  inFlightRequests.set(0);
+  inflightRequestEntries.set([]);
+  uiConfig.set(defaultUIConfig());
+  if (connected) models.set([]);
+  playgroundModelsRequest++;
+  playgroundModelsRefreshQueued = false;
+  playgroundModels.set([]);
+  profiles.set([]);
+  activeProfile.set(null);
+  profileRevision++;
+}
+
 export function enableAPIEvents(enabled: boolean): void {
   if (!enabled) {
     apiEventSource?.close();
     apiEventSource = null;
-    activityRevision.set(0);
-    inFlightRequests.set(0);
-    inflightRequestEntries.set([]);
-    uiConfig.set(defaultUIConfig());
-    playgroundModelsRequest++;
-    playgroundModelsRefreshQueued = false;
-    playgroundModels.set([]);
-    profiles.set([]);
-    activeProfile.set(null);
-    profileRevision++;
+    resetAPIState(false);
     return;
   }
 
@@ -85,18 +94,7 @@ export function enableAPIEvents(enabled: boolean): void {
     connectionState.set("connecting");
 
     apiEventSource.onopen = () => {
-      // Clear everything on connect to keep things in sync
-      activityRevision.update((n) => n + 1);
-      inFlightRequests.set(0);
-      inflightRequestEntries.set([]);
-      uiConfig.set(defaultUIConfig());
-      models.set([]);
-      playgroundModelsRequest++;
-      playgroundModelsRefreshQueued = false;
-      playgroundModels.set([]);
-      profiles.set([]);
-      activeProfile.set(null);
-      profileRevision++;
+      resetAPIState(true);
       retryCount = 0;
       connectionState.set("connected");
       void fetchProfiles().catch((error) => console.error(error));
@@ -123,19 +121,57 @@ export function enableAPIEvents(enabled: boolean): void {
   connect();
 }
 
+function handleModelStatus(data: string): void {
+  const receivedAt = Date.now();
+  const newModels = (JSON.parse(data) as Model[]).map((m) =>
+    m.uptimeMs !== undefined ? { ...m, readyAt: receivedAt - m.uptimeMs } : m,
+  );
+  // Sort models by name and id
+  newModels.sort((a, b) => {
+    return (a.name + a.id).localeCompare(b.name + b.id, undefined, { numeric: true });
+  });
+  models.set(newModels);
+}
+
+function handleInflight(data: string): void {
+  const stats = JSON.parse(data) as InFlightStats;
+  const withReceiptTime = (request: InflightRequestEntry): InflightRequestEntry => ({
+    ...request,
+    client_received_at_ms: performance.now(),
+  });
+  inflightRequestEntries.update((current) => {
+    let requests = current;
+    switch (stats.operation) {
+      case "snapshot":
+        requests = (stats.requests ?? []).map(withReceiptTime);
+        break;
+      case "upsert": {
+        if (!stats.request) break;
+        const received = withReceiptTime(stats.request);
+        const index = current.findIndex((request) => request.id === received.id);
+        requests = index === -1
+          ? [...current, received]
+          : current.map((request, i) => i === index ? received : request);
+        break;
+      }
+      case "remove":
+        requests = current.filter((request) => request.id !== stats.id);
+        break;
+    }
+    requests.sort((a, b) => {
+      const byTime = Date.parse(a.timestamp) - Date.parse(b.timestamp);
+      return byTime || a.id.localeCompare(b.id, undefined, { numeric: true });
+    });
+    inFlightRequests.set(requests.length);
+    return requests;
+  });
+}
+
 export function handleAPIEventMessage(data: string): void {
   const message = JSON.parse(data) as APIEventEnvelope;
   switch (message.type) {
     case "modelStatus": {
-      const receivedAt = Date.now();
-      const newModels = (JSON.parse(message.data) as Model[]).map((m) =>
-        m.uptimeMs !== undefined ? { ...m, readyAt: receivedAt - m.uptimeMs } : m,
-      );
-      // Sort models by name and id
-      newModels.sort((a, b) => {
-        return (a.name + a.id).localeCompare(b.name + b.id, undefined, { numeric: true });
-      });
-      models.set(newModels);
+      handleModelStatus(message.data);
       break;
     }
 
@@ -145,37 +181,7 @@ export function handleAPIEventMessage(data: string): void {
     }
 
     case "inflight": {
-      const stats = JSON.parse(message.data) as InFlightStats;
-      const withReceiptTime = (request: InflightRequestEntry): InflightRequestEntry => ({
-        ...request,
-        client_received_at_ms: performance.now(),
-      });
-      inflightRequestEntries.update((current) => {
-        let requests = current;
-        switch (stats.operation) {
-          case "snapshot":
-            requests = (stats.requests ?? []).map(withReceiptTime);
-            break;
-          case "upsert": {
-            if (!stats.request) break;
-            const received = withReceiptTime(stats.request);
-            const index = current.findIndex((request) => request.id === received.id);
-            requests = index === -1
-              ? [...current, received]
-              : current.map((request, i) => i === index ? received : request);
-            break;
-          }
-          case "remove":
-            requests = current.filter((request) => request.id !== stats.id);
-            break;
-        }
-        requests.sort((a, b) => {
-          const byTime = Date.parse(a.timestamp) - Date.parse(b.timestamp);
-          return byTime || a.id.localeCompare(b.id, undefined, { numeric: true });
-        });
-        inFlightRequests.set(requests.length);
-        return requests;
-      });
+      handleInflight(message.data);
       break;
     }
 
@@ -317,23 +323,30 @@ async function loadPlaygroundModels(request: number): Promise<Model[]> {
   }
 }
 
+const MAX_QUEUED_PLAYGROUND_REFRESHES = 8;
+
+async function refreshPlaygroundModels(): Promise<void> {
+  for (let refresh = 0; refresh < MAX_QUEUED_PLAYGROUND_REFRESHES; refresh++) {
+    const currentFetch = loadPlaygroundModels(++playgroundModelsRequest);
+    playgroundModelsFetch = currentFetch;
+    try {
+      await currentFetch;
+    } finally {
+      if (playgroundModelsFetch === currentFetch) playgroundModelsFetch = null;
+    }
+    if (!playgroundModelsRefreshQueued) return;
+    playgroundModelsRefreshQueued = false;
+  }
+  throw new Error(`Playground refresh exceeded MAX_QUEUED_PLAYGROUND_REFRESHES (${MAX_QUEUED_PLAYGROUND_REFRESHES})`);
+}
+
 export function fetchPlaygroundModels(): Promise<Model[]> {
   if (playgroundModelsFetch) {
     playgroundModelsRefreshQueued = true;
     return playgroundModelsFetch;
   }
-
-  const request = ++playgroundModelsRequest;
-  const currentFetch = loadPlaygroundModels(request).finally(() => {
-    if (playgroundModelsFetch !== currentFetch) return;
-    playgroundModelsFetch = null;
-    if (playgroundModelsRefreshQueued) {
-      playgroundModelsRefreshQueued = false;
-      void fetchPlaygroundModels();
-    }
-  });
-  playgroundModelsFetch = currentFetch;
-  return currentFetch;
+  void refreshPlaygroundModels().catch((error) => console.error("Failed to refresh Playground models:", error));
+  return playgroundModelsFetch!;
 }
 
 export async function getActivity(params: {
