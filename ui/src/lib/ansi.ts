@@ -51,6 +51,19 @@ function color256(n: number, palette: AnsiPalette): string {
   return `rgb(${v}, ${v}, ${v})`;
 }
 
+function extendedSgrColor(params: number[], i: number, palette: AnsiPalette): { color: string; consumed: number } | null {
+  if (params[i + 1] === 5) {
+    return { color: color256(params[i + 2] ?? 0, palette), consumed: 2 };
+  }
+  if (params[i + 1] === 2) {
+    const r = params[i + 2] ?? 0;
+    const g = params[i + 3] ?? 0;
+    const b = params[i + 4] ?? 0;
+    return { color: `rgb(${r}, ${g}, ${b})`, consumed: 4 };
+  }
+  return null;
+}
+
 function applySgr(prev: AnsiStyle, params: number[], palette: AnsiPalette): AnsiStyle {
   let style = prev;
   const update = (patch: Partial<AnsiStyle>) => {
@@ -94,33 +107,21 @@ function applySgr(prev: AnsiStyle, params: number[], palette: AnsiPalette): Ansi
     } else if (p >= 100 && p <= 107) {
       update({ bg: palette.brightColors[p - 100] });
     } else if (p === 38 || p === 48) {
-      const isFg = p === 38;
-      if (params[i + 1] === 5) {
-        const color = color256(params[i + 2] ?? 0, palette);
-        update(isFg ? { fg: color } : { bg: color });
-        i += 2;
-      } else if (params[i + 1] === 2) {
-        const r = params[i + 2] ?? 0;
-        const g = params[i + 3] ?? 0;
-        const b = params[i + 4] ?? 0;
-        const color = `rgb(${r}, ${g}, ${b})`;
-        update(isFg ? { fg: color } : { bg: color });
-        i += 4;
+      const extended = extendedSgrColor(params, i, palette);
+      if (extended) {
+        update(p === 38 ? { fg: extended.color } : { bg: extended.color });
+        i += extended.consumed;
       }
     }
     i++;
   }
-  if (
-    style.bold === prev.bold &&
-    style.italic === prev.italic &&
-    style.underline === prev.underline &&
-    style.strikethrough === prev.strikethrough &&
-    style.fg === prev.fg &&
-    style.bg === prev.bg
-  ) {
-    return prev;
-  }
-  return style;
+  return stylesEqual(style, prev) ? prev : style;
+}
+
+function stylesEqual(style: AnsiStyle, prev: AnsiStyle): boolean {
+  return style.bold === prev.bold && style.italic === prev.italic &&
+    style.underline === prev.underline && style.strikethrough === prev.strikethrough &&
+    style.fg === prev.fg && style.bg === prev.bg;
 }
 
 function styleIsDefault(style: AnsiStyle): boolean {

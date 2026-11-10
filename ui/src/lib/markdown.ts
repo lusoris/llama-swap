@@ -147,12 +147,7 @@ const processor = unified()
   .use(rehypeHighlight)
   .use(rehypeStringify, { allowDangerousHtml: true });
 
-export function splitCompleteBlocks(text: string): { complete: string; pending: string } {
-  if (!text) {
-    return { complete: "", pending: "" };
-  }
-
-  const lines = text.split("\n");
+function completeBlockBoundary(lines: string[]): number {
   let lastCompleteBoundary = -1; // index of last line that ends a complete block
   let inFence = false;
   let fenceChar = "";
@@ -200,6 +195,17 @@ export function splitCompleteBlocks(text: string): { complete: string; pending: 
       lastCompleteBoundary = i;
     }
   }
+
+  return lastCompleteBoundary;
+}
+
+export function splitCompleteBlocks(text: string): { complete: string; pending: string } {
+  if (!text) {
+    return { complete: "", pending: "" };
+  }
+
+  const lines = text.split("\n");
+  const lastCompleteBoundary = completeBlockBoundary(lines);
 
   if (lastCompleteBoundary < 0) {
     return { complete: "", pending: text };

@@ -3,9 +3,9 @@
   import { hasListedModels, playgroundModels } from "../../stores/api";
   import { persistentStore } from "../../stores/persistent";
   import { showGenerationStats } from "../../stores/generationStats";
-  import { streamChatCompletion, type ToolDefinition } from "../../lib/chatApi";
+  import { streamChatCompletion, type ToolDefinition, type StreamChunk } from "../../lib/chatApi";
   import { combineGenerationStats, currentStats, markCancelled, startTracking, trackChunk } from "../../lib/generationStats";
-  import { runAgent, sanitizeMessages, DEFAULT_MAX_ITERATIONS } from "../../lib/agentLoop";
+  import { runAgent, sanitizeMessages, DEFAULT_MAX_ITERATIONS, type AgentEvent } from "../../lib/agentLoop";
   import { fetchToolDefinitions, callTool, friendlyToolName } from "../../lib/agentTools";
   import { DOCS_AGENT_SYSTEM_PROMPT } from "../../lib/prompts/docsAgent";
   import { pickSuggestions } from "../../lib/prompts/docsSuggestions";
@@ -231,7 +231,11 @@
     const json = JSON.stringify(messages);
     const elapsed = Date.now() - lastSaveTime;
     const save = () => {
-      try { localStorage.setItem("playground-docs-messages", json); } catch {}
+      try {
+        localStorage.setItem("playground-docs-messages", json);
+      } catch (e) {
+        console.error("Error saving value for playground-docs-messages", e);
+      }
       lastSaveTime = Date.now();
     };
     if (elapsed >= 2000) {
@@ -357,102 +361,48 @@
     }
   }
 
+  async function* streamTrackedChat(msgs: ChatMessage[], signal: AbortSignal, tools: ToolDefinition[]): AsyncGenerator<StreamChunk> {
+    const tracker = startTracking(performance.now(), selectedContextLength());
+    const ticker = window.setInterval(() => {
+      patchLast({ stats: currentStats(tracker, performance.now(), true) });
+    }, 200);
+
+    try {
+      for await (const chunk of streamChatCompletion($selectedModelStore, msgs, signal, {
+        endpoint: "v1/chat/completions" as const,
+        tools,
+        // Keep llama-server's per-chunk timings on for every agent
+        // iteration, including tool-call turns.
+        timingsPerToken: true,
+      })) {
+        const now = performance.now();
+        trackChunk(tracker, chunk, now);
+        patchLast({ stats: currentStats(tracker, now, true) });
+        yield chunk;
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") markCancelled(tracker);
+      throw error;
+    } finally {
+      window.clearInterval(ticker);
+      if (signal.aborted) markCancelled(tracker);
+      patchLast({ stats: currentStats(tracker, performance.now(), false) });
+    }
+  }
+
   async function runAgentTurn(signal: AbortSignal) {
     const tools = toolDefs;
     const deps = {
-      streamChat: async function* (msgs: ChatMessage[], sig: AbortSignal) {
-        const tracker = startTracking(performance.now(), selectedContextLength());
-        const ticker = window.setInterval(() => {
-          patchLast({ stats: currentStats(tracker, performance.now(), true) });
-        }, 200);
-
-        try {
-          for await (const chunk of streamChatCompletion($selectedModelStore, msgs, sig, {
-            endpoint: "v1/chat/completions" as const,
-            tools,
-            // Keep llama-server's per-chunk timings on for every agent
-            // iteration, including tool-call turns.
-            timingsPerToken: true,
-          })) {
-            const now = performance.now();
-            trackChunk(tracker, chunk, now);
-            patchLast({ stats: currentStats(tracker, now, true) });
-            yield chunk;
-          }
-        } catch (error) {
-          if (error instanceof Error && error.name === "AbortError") markCancelled(tracker);
-          throw error;
-        } finally {
-          window.clearInterval(ticker);
-          if (sig.aborted) markCancelled(tracker);
-          patchLast({ stats: currentStats(tracker, performance.now(), false) });
-        }
-      },
+      streamChat: (msgs: ChatMessage[], sig: AbortSignal) => streamTrackedChat(msgs, sig, tools),
       callTool,
     };
-
     let sawToolCall = false;
 
     for await (const event of runAgent(requestMessages(), deps, {
       maxIterations: DEFAULT_MAX_ITERATIONS,
       signal,
     })) {
-      switch (event.type) {
-        case "iteration":
-          // The initial placeholder is created before the loop starts. Later
-          // iterations start only after all tool results, keeping parallel
-          // calls together without empty assistant turns between them.
-          if (event.n > 1) {
-            messages = [...messages, { role: "assistant", content: "" }];
-          }
-          break;
-
-        case "content":
-        case "reasoning":
-          appendDelta(event.type === "content" ? "content" : "reasoning", event.delta);
-          break;
-
-        case "assistant_end":
-          if (isReasoning) {
-            patchLast({ reasoningTimeMs: Date.now() - reasoningStartTime });
-            isReasoning = false;
-          }
-          patchLast({ tool_calls: event.message.tool_calls });
-          if (event.message.tool_calls?.length) {
-            sawToolCall = true;
-          } else if (!sawToolCall) {
-            // llama.cpp without --jinja (default on recent builds, but not
-            // older ones) ignores `tools` entirely and answers in prose, with
-            // no error anywhere. Catch the shape of that.
-            showJinjaHint = looksLikeUnparsedToolCall(getTextContent(event.message.content));
-          }
-          break;
-
-        case "tool_start":
-          messages = [
-            ...messages,
-            { role: "tool", tool_call_id: event.call.id, name: event.call.function.name, content: "" },
-          ];
-          break;
-
-        case "tool_end":
-          patchLast(event.message);
-          break;
-
-        case "max_iterations":
-          agentNotice =
-            `Stopped after ${event.n} tool ${event.n === 1 ? "round" : "rounds"}. ` +
-            `Send another message to continue.`;
-          break;
-
-        case "error":
-          appendError(event.message);
-          break;
-
-        case "done":
-          if (event.reason === "aborted") patchLast({ interrupted: "cancelled" });
-          break;
-      }
+      sawToolCall = handleAgentEvent(event, sawToolCall);
     }
 
     // A final turn that produced nothing can leave the trailing placeholder
@@ -461,6 +411,64 @@
     if (last?.role === "assistant" && !last.interrupted && !last.tool_calls?.length && !last.reasoning_content && lastText() === "") {
       messages = messages.slice(0, -1);
     }
+  }
+
+  function handleAssistantEnd(message: ChatMessage, sawToolCall: boolean): boolean {
+    if (isReasoning) {
+      patchLast({ reasoningTimeMs: Date.now() - reasoningStartTime });
+      isReasoning = false;
+    }
+    patchLast({ tool_calls: message.tool_calls });
+    if (message.tool_calls?.length) return true;
+    if (!sawToolCall) showJinjaHint = looksLikeUnparsedToolCall(getTextContent(message.content));
+    return sawToolCall;
+  }
+
+  function handleAgentEvent(event: AgentEvent, sawToolCall: boolean): boolean {
+    switch (event.type) {
+      case "iteration":
+        // The initial placeholder is created before the loop starts. Later
+        // iterations start only after all tool results, keeping parallel
+        // calls together without empty assistant turns between them.
+        if (event.n > 1) {
+          messages = [...messages, { role: "assistant", content: "" }];
+        }
+        break;
+
+      case "content":
+      case "reasoning":
+        appendDelta(event.type === "content" ? "content" : "reasoning", event.delta);
+        break;
+
+      case "assistant_end":
+        return handleAssistantEnd(event.message, sawToolCall);
+
+      case "tool_start":
+        messages = [
+          ...messages,
+          { role: "tool", tool_call_id: event.call.id, name: event.call.function.name, content: "" },
+        ];
+        break;
+
+      case "tool_end":
+        patchLast(event.message);
+        break;
+
+      case "max_iterations":
+        agentNotice =
+          `Stopped after ${event.n} tool ${event.n === 1 ? "round" : "rounds"}. ` +
+          `Send another message to continue.`;
+        break;
+
+      case "error":
+        appendError(event.message);
+        break;
+
+      case "done":
+        if (event.reason === "aborted") patchLast({ interrupted: "cancelled" });
+        break;
+    }
+    return sawToolCall;
   }
 
   function looksLikeUnparsedToolCall(text: string): boolean {

@@ -94,6 +94,100 @@ export function finalizeToolCalls(acc: Map<number, Partial<ToolCall>>): ToolCall
     }));
 }
 
+async function* streamAssistant(
+  messages: ChatMessage[], deps: AgentDeps, signal: AbortSignal
+): AsyncGenerator<AgentEvent, ChatMessage | null> {
+  const acc = new Map<number, Partial<ToolCall>>();
+  let content = "";
+  let reasoning = "";
+
+  try {
+    for await (const chunk of deps.streamChat(messages, signal)) {
+      if (chunk.done) break;
+      if (chunk.reasoning_content) {
+        reasoning += chunk.reasoning_content;
+        yield { type: "reasoning", delta: chunk.reasoning_content };
+      }
+      if (chunk.content) {
+        content += chunk.content;
+        yield { type: "content", delta: chunk.content };
+      }
+      if (chunk.tool_calls) {
+        accumulateToolCalls(acc, chunk.tool_calls);
+      }
+    }
+  } catch (error) {
+    if (isAbort(error) || signal.aborted) {
+      yield { type: "done", reason: "aborted" };
+      return null;
+    }
+    yield { type: "error", message: error instanceof Error ? error.message : "An error occurred" };
+    yield { type: "done", reason: "error" };
+    return null;
+  }
+
+  const calls = finalizeToolCalls(acc);
+
+  const assistant: ChatMessage = { role: "assistant", content };
+  if (calls.length) assistant.tool_calls = calls;
+  if (reasoning) assistant.reasoning_content = reasoning;
+
+  return assistant;
+}
+
+async function* executeTool(
+  call: ToolCall, deps: AgentDeps, signal: AbortSignal, now: () => number
+): AsyncGenerator<AgentEvent, ChatMessage | null> {
+  const startedAt = now();
+  let ok = true;
+  let text: string;
+
+  let args: unknown;
+  try {
+    args = JSON.parse(call.function.arguments);
+  } catch (error) {
+    // The invalid arguments never reach the server. Handing the parse
+    // error back as a tool result lets the model re-emit the call, which
+    // small models usually get right on the second try.
+    ok = false;
+    const reason = error instanceof Error ? error.message : "invalid JSON";
+    text =
+      `Error: arguments were not valid JSON (${reason}). ` +
+      `Received: ${call.function.arguments.slice(0, 200)}. ` +
+      `Re-emit this tool call with a valid JSON object.`;
+  }
+
+  if (ok) {
+    try {
+      // A tool that ran but could not answer reports isError and carries
+      // its own correction text; only a thrown error is a real failure.
+      const outcome = await deps.callTool(call.function.name, args, signal);
+      text = outcome.text;
+      ok = !outcome.isError;
+    } catch (error) {
+      if (isAbort(error) || signal.aborted) {
+        yield { type: "done", reason: "aborted" };
+        return null;
+      }
+      // A failing tool never ends the turn; the model decides what to do.
+      ok = false;
+      text = `Error: ${error instanceof Error ? error.message : "the tool failed"}`;
+    }
+  }
+
+  const durationMs = now() - startedAt;
+  const message: ChatMessage = {
+    role: "tool",
+    tool_call_id: call.id,
+    name: call.function.name,
+    content: text!,
+    toolOk: ok,
+    toolDurationMs: durationMs,
+  };
+
+  return message;
+}
+
 /**
  * Runs the model, executes any tools it calls, and repeats until it answers
  * without calling one.
@@ -113,7 +207,7 @@ export async function* runAgent(
 
   const messages = [...seed];
 
-  for (let iteration = 1; ; iteration++) {
+  for (let iteration = 1; iteration <= Math.ceil(max); iteration++) {
     if (signal.aborted) {
       yield { type: "done", reason: "aborted" };
       return;
@@ -121,41 +215,9 @@ export async function* runAgent(
 
     yield { type: "iteration", n: iteration, max };
 
-    const acc = new Map<number, Partial<ToolCall>>();
-    let content = "";
-    let reasoning = "";
-
-    try {
-      for await (const chunk of deps.streamChat(messages, signal)) {
-        if (chunk.done) break;
-        if (chunk.reasoning_content) {
-          reasoning += chunk.reasoning_content;
-          yield { type: "reasoning", delta: chunk.reasoning_content };
-        }
-        if (chunk.content) {
-          content += chunk.content;
-          yield { type: "content", delta: chunk.content };
-        }
-        if (chunk.tool_calls) {
-          accumulateToolCalls(acc, chunk.tool_calls);
-        }
-      }
-    } catch (error) {
-      if (isAbort(error) || signal.aborted) {
-        yield { type: "done", reason: "aborted" };
-        return;
-      }
-      yield { type: "error", message: error instanceof Error ? error.message : "An error occurred" };
-      yield { type: "done", reason: "error" };
-      return;
-    }
-
-    const calls = finalizeToolCalls(acc);
-
-    const assistant: ChatMessage = { role: "assistant", content };
-    if (calls.length) assistant.tool_calls = calls;
-    if (reasoning) assistant.reasoning_content = reasoning;
-
+    const assistant = yield* streamAssistant(messages, deps, signal);
+    if (!assistant) return;
+    const calls = assistant.tool_calls ?? [];
     messages.push(assistant);
     yield { type: "assistant_end", message: assistant };
 
@@ -180,55 +242,10 @@ export async function* runAgent(
 
       yield { type: "tool_start", call, iteration };
 
-      const startedAt = now();
-      let ok = true;
-      let text: string;
-
-      let args: unknown;
-      try {
-        args = JSON.parse(call.function.arguments);
-      } catch (error) {
-        // The invalid arguments never reach the server. Handing the parse
-        // error back as a tool result lets the model re-emit the call, which
-        // small models usually get right on the second try.
-        ok = false;
-        const reason = error instanceof Error ? error.message : "invalid JSON";
-        text =
-          `Error: arguments were not valid JSON (${reason}). ` +
-          `Received: ${call.function.arguments.slice(0, 200)}. ` +
-          `Re-emit this tool call with a valid JSON object.`;
-      }
-
-      if (ok) {
-        try {
-          // A tool that ran but could not answer reports isError and carries
-          // its own correction text; only a thrown error is a real failure.
-          const outcome = await deps.callTool(call.function.name, args, signal);
-          text = outcome.text;
-          ok = !outcome.isError;
-        } catch (error) {
-          if (isAbort(error) || signal.aborted) {
-            yield { type: "done", reason: "aborted" };
-            return;
-          }
-          // A failing tool never ends the turn; the model decides what to do.
-          ok = false;
-          text = `Error: ${error instanceof Error ? error.message : "the tool failed"}`;
-        }
-      }
-
-      const durationMs = now() - startedAt;
-      const message: ChatMessage = {
-        role: "tool",
-        tool_call_id: call.id,
-        name: call.function.name,
-        content: text!,
-        toolOk: ok,
-        toolDurationMs: durationMs,
-      };
-
+      const message = yield* executeTool(call, deps, signal, now);
+      if (!message) return;
       messages.push(message);
-      yield { type: "tool_end", call, message, ok, durationMs };
+      yield { type: "tool_end", call, message, ok: message.toolOk!, durationMs: message.toolDurationMs! };
     }
   }
 }

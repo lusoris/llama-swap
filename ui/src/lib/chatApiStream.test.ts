@@ -156,3 +156,18 @@ describe("stop reasons on the other endpoints", () => {
     expect(chunks.at(-1)?.done).toBe(true);
   });
 });
+
+it.each([
+  { endpoint: "v1/chat/completions" as const, event: "", payload: { choices: [{ delta: { content: "next" } }] } },
+  { endpoint: "v1/messages" as const, event: "content_block_delta", payload: { delta: { type: "text_delta", text: "next" } } },
+  { endpoint: "v1/responses" as const, event: "response.output_text.delta", payload: { delta: "next" } },
+])("$endpoint skips malformed data and yields the next event", async ({ endpoint, event, payload }) => {
+  const lines = event
+    ? [`event: ${event}`, "data: malformed", "", `event: ${event}`, "data: null", "",
+       `event: ${event}`, `data: ${JSON.stringify(payload)}`, ""]
+    : ["data: malformed", "data: null", `data: ${JSON.stringify(payload)}`, "data: [DONE]"];
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sseResponse(lines)));
+  expect((await collect({ endpoint })).filter((chunk) => chunk.content)).toEqual([
+    expect.objectContaining({ content: "next" }),
+  ]);
+});
