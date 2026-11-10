@@ -15,7 +15,8 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    # ceil(2 x p95), p95 5.8 min; a build-cache miss rebuilds everything.
+    timeout-minutes: 12
     steps:
       - name: Stop on a draft pull request
         if: github.event.pull_request.draft == true
