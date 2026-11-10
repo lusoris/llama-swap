@@ -60,9 +60,15 @@ jobs:
       # entry keeps the workflow simple.
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          # Disable the action cache because this workflow can run off main.
+          cache-image: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          # Disable the action cache because this workflow can run off main.
+          cache-binary: false
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
@@ -88,7 +94,10 @@ jobs:
     needs: build-and-push
     # Skip on forks — the delete API requires package-admin on the
     # upstream account and would otherwise red-x every fork CI run.
-    if: github.repository == 'mostlygeek/llama-swap'
+    # The cleanup action saves a manifest cache, so restrict it to main.
+    if: >-
+      github.repository == 'mostlygeek/llama-swap' &&
+      github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2

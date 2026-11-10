@@ -1,0 +1,6 @@
+on: pull_request
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example/unknown-action@0123456789abcdef0123456789abcdef01234567 # v1

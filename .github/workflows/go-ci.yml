@@ -41,6 +41,34 @@ jobs:
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
+          # See ci.yml: explicit restores keep other refs from saving.
+          cache: false
+
+      # Runner and input hashes make cache keys exceed 80 columns.
+      # yamllint disable rule:line-length
+      - name: Restore Go module cache
+        id: restore-gomod
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: gomod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            gomod-${{ runner.os }}-${{ runner.arch }}-
+      # yamllint enable rule:line-length
+
+      # This job uses the same go test -race flags as ci.yml's test job.
+      # Restore its build cache without saving; ci.yml owns the entry.
+      # yamllint disable rule:line-length
+      - name: Restore Go build cache
+        id: restore-gobuild
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build
+          key: gobuild-${{ runner.os }}-${{ runner.arch }}-test-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            gobuild-${{ runner.os }}-${{ runner.arch }}-test-${{ hashFiles('**/go.sum') }}-
+            gobuild-${{ runner.os }}-${{ runner.arch }}-test-
+      # yamllint enable rule:line-length
 
       # Only run in this linux based runner
       - name: Check Formatting
@@ -50,26 +78,32 @@ jobs:
             exit 1
           fi
       # cache simple-responder to save the build time
+      # yamllint disable rule:line-length
       - name: Restore Simple Responder
         id: restore-simple-responder
-        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ./build
           key: ${{ runner.os }}-simple-responder-${{ hashFiles('cmd/simple-responder/simple-responder.go') }}
+      # yamllint enable rule:line-length
 
       # necessary for testing proxy/Process swapping
       - name: Create simple-responder
         if: steps.restore-simple-responder.outputs.cache-hit != 'true'
         run: make simple-responder
 
+      # yamllint disable rule:line-length
       - name: Save Simple Responder
-        # nothing new to save ... skip this step
-        if: steps.restore-simple-responder.outputs.cache-hit != 'true'
+        # Only main saves; pull-request entries evict caches main can use.
+        if: >-
+          github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+          steps.restore-simple-responder.outputs.cache-hit != 'true'
         id: save-simple-responder
-        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ./build
           key: ${{ runner.os }}-simple-responder-${{ hashFiles('cmd/simple-responder/simple-responder.go') }}
+      # yamllint enable rule:line-length
 
       - name: Test all
         run: make test-all

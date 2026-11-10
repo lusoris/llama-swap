@@ -39,7 +39,7 @@ jobs:
       # yamllint disable rule:line-length
       - name: Restore Go module cache
         id: restore-gomod
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/go/pkg/mod
           key: gomod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum') }}
@@ -50,7 +50,7 @@ jobs:
       # other job's.
       - name: Restore Go build cache
         id: restore-gobuild
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/go-build
           key: gobuild-${{ runner.os }}-${{ runner.arch }}-vulncheck-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
@@ -73,23 +73,25 @@ jobs:
       - name: Run gosec
         run: gosec -conf .gosec.json ./...
 
-      # Pull requests restore only; the push to main and the nightly run (on
-      # main) save. See ci.yml: a cache saved from a pull-request ref is
-      # readable from that ref alone and pushes main's entries out.
+      # Pull requests restore only; main's pushes and nightly schedule save.
+      # A merge-queue or pull-request ref save is readable from that ref alone.
+      # The pinned uses lines run past 80 columns.
+      # yamllint disable rule:line-length
       - name: Save Go module cache
         if: >-
-          github.event_name != 'pull_request' &&
+          github.ref == 'refs/heads/main' &&
           steps.restore-gomod.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/go/pkg/mod
           key: ${{ steps.restore-gomod.outputs.cache-primary-key }}
 
       - name: Save Go build cache
         if: >-
-          github.event_name != 'pull_request' &&
+          github.ref == 'refs/heads/main' &&
           steps.restore-gobuild.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/go-build
           key: ${{ steps.restore-gobuild.outputs.cache-primary-key }}
+      # yamllint enable rule:line-length
