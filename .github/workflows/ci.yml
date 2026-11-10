@@ -72,7 +72,7 @@ jobs:
         if: >-
           github.event.pull_request.draft != true &&
           steps.manifest.outputs.present == 'true'
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/go/pkg/mod
           key: gomod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum') }}
@@ -90,7 +90,7 @@ jobs:
         if: >-
           github.event.pull_request.draft != true &&
           steps.manifest.outputs.present == 'true'
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/go-build
           key: gobuild-${{ runner.os }}-${{ runner.arch }}-test-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
@@ -137,12 +137,14 @@ jobs:
       # Only a push to main saves. A cache saved from a pull-request ref is
       # readable from that ref alone, and one build cache per pull request
       # pushes main's entries out of the repository's 10 GB cache limit.
+      # The pinned uses lines run past 80 columns.
+      # yamllint disable rule:line-length
       - name: Save Go module cache
         if: >-
           github.event_name == 'push' && github.ref == 'refs/heads/main' &&
           steps.manifest.outputs.present == 'true' &&
           steps.restore-gomod.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/go/pkg/mod
           key: ${{ steps.restore-gomod.outputs.cache-primary-key }}
@@ -152,7 +154,8 @@ jobs:
           github.event_name == 'push' && github.ref == 'refs/heads/main' &&
           steps.manifest.outputs.present == 'true' &&
           steps.restore-gobuild.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/go-build
           key: ${{ steps.restore-gobuild.outputs.cache-primary-key }}
+      # yamllint enable rule:line-length
