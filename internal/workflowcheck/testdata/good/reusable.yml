@@ -1,0 +1,4 @@
+on: pull_request
+jobs:
+  callee:
+    uses: ./.github/workflows/callee.yml

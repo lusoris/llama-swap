@@ -1,0 +1,10 @@
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v10
