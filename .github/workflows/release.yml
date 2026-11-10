@@ -37,6 +37,19 @@ jobs:
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
+          # See ci.yml: explicit restores keep other refs from saving.
+          cache: false
+
+      # Runner and input hashes make cache keys exceed 80 columns.
+      # yamllint disable rule:line-length
+      - name: Restore Go module cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: gomod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            gomod-${{ runner.os }}-${{ runner.arch }}-
+      # yamllint enable rule:line-length
       - name: Extract release notes from CHANGELOG.md
         env:
           TAG: ${{ github.event.inputs.tag || github.ref_name }}
@@ -58,6 +71,18 @@ jobs:
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: "24"
+          # Explicit restores avoid automatic npm cache writes on release refs.
+          package-manager-cache: false
+
+      # yamllint disable rule:line-length
+      - name: Restore npm cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ui/package-lock.json') }}
+          restore-keys: |
+            npm-${{ runner.os }}-${{ runner.arch }}-
+      # yamllint enable rule:line-length
       - name: Build UI
         run: |
           make ui

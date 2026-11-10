@@ -73,12 +73,11 @@ jobs:
       - name: Run gosec
         run: gosec -conf .gosec.json ./...
 
-      # Pull requests restore only; the push to main and the nightly run (on
-      # main) save. See ci.yml: a cache saved from a pull-request ref is
-      # readable from that ref alone and pushes main's entries out.
+      # Pull requests restore only; main's pushes and nightly schedule save.
+      # A merge-queue or pull-request ref save is readable from that ref alone.
       - name: Save Go module cache
         if: >-
-          github.event_name != 'pull_request' &&
+          github.ref == 'refs/heads/main' &&
           steps.restore-gomod.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
@@ -87,7 +86,7 @@ jobs:
 
       - name: Save Go build cache
         if: >-
-          github.event_name != 'pull_request' &&
+          github.ref == 'refs/heads/main' &&
           steps.restore-gobuild.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:

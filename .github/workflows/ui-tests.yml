@@ -27,8 +27,30 @@ jobs:
       uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
       with:
         node-version: '24'
-        cache: 'npm'
-        cache-dependency-path: ui/package-lock.json
+        # Explicit restores prevent npm cache writes from pull requests.
+        package-manager-cache: false
+
+    # Runner and input hashes make cache keys exceed 80 columns.
+    # yamllint disable rule:line-length
+    - name: Restore npm cache
+      id: restore-npm
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.npm
+        key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ui/package-lock.json') }}
+        restore-keys: |
+          npm-${{ runner.os }}-${{ runner.arch }}-
+    # yamllint enable rule:line-length
 
     - name: Run UI tests
       run: make test-ui
+
+    # Only main saves entries that all pull requests can restore.
+    - name: Save npm cache
+      if: >-
+        github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+        steps.restore-npm.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.npm
+        key: ${{ steps.restore-npm.outputs.cache-primary-key }}

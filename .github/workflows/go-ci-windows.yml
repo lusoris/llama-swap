@@ -38,14 +38,50 @@ jobs:
       uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
       with:
         go-version-file: go.mod
+        # See ci.yml: explicit restores keep other refs from saving.
+        cache: false
+
+    # Windows runners expose different Go cache paths, so discover them.
+    - name: Locate Go caches
+      id: go-env
+      shell: bash
+      run: |
+        echo "gomodcache=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+        echo "gocache=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+
+    # Runner and input hashes make cache keys exceed 80 columns.
+    # yamllint disable rule:line-length
+    - name: Restore Go module cache
+      id: restore-gomod
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.go-env.outputs.gomodcache }}
+        key: gomod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          gomod-${{ runner.os }}-${{ runner.arch }}-
+    # yamllint enable rule:line-length
+
+    # yamllint disable rule:line-length
+    - name: Restore Go build cache
+      id: restore-gobuild
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.go-env.outputs.gocache }}
+        key: gobuild-${{ runner.os }}-${{ runner.arch }}-run-tests-windows-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
+        restore-keys: |
+          gobuild-${{ runner.os }}-${{ runner.arch }}-run-tests-windows-${{ hashFiles('**/go.sum') }}-
+          gobuild-${{ runner.os }}-${{ runner.arch }}-run-tests-windows-
+    # yamllint enable rule:line-length
 
     # cache simple-responder to save the build time
+    # yamllint disable rule:line-length
     - name: Restore Simple Responder
       id: restore-simple-responder
-      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ./build
         key: ${{ runner.os }}-simple-responder-${{ hashFiles('cmd/simple-responder/simple-responder.go') }}
+    # yamllint enable rule:line-length
 
     # necessary for testing proxy/Process swapping
     - name: Create simple-responder
@@ -53,15 +89,38 @@ jobs:
       shell: bash
       run: make simple-responder-windows
 
+    # yamllint disable rule:line-length
     - name: Save Simple Responder
-      # nothing new to save ... skip this step
-      if: steps.restore-simple-responder.outputs.cache-hit != 'true'
+      # Only main saves; pull-request entries evict caches main can use.
+      if: >-
+        github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+        steps.restore-simple-responder.outputs.cache-hit != 'true'
       id: save-simple-responder
-      uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ./build
         key: ${{ runner.os }}-simple-responder-${{ hashFiles('cmd/simple-responder/simple-responder.go') }}
+    # yamllint enable rule:line-length
 
     - name: Test all
       shell: bash
       run: make test-all
+
+    # Only main saves entries that all pull requests can restore.
+    - name: Save Go module cache
+      if: >-
+        github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+        steps.restore-gomod.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.go-env.outputs.gomodcache }}
+        key: ${{ steps.restore-gomod.outputs.cache-primary-key }}
+
+    - name: Save Go build cache
+      if: >-
+        github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+        steps.restore-gobuild.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.go-env.outputs.gocache }}
+        key: ${{ steps.restore-gobuild.outputs.cache-primary-key }}

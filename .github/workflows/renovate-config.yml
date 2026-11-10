@@ -48,6 +48,19 @@ jobs:
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
+          # See ci.yml: explicit restores keep other refs from saving.
+          cache: false
+
+      # Runner and input hashes make cache keys exceed 80 columns.
+      # yamllint disable rule:line-length
+      - name: Restore Go module cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: gomod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            gomod-${{ runner.os }}-${{ runner.arch }}-
+      # yamllint enable rule:line-length
 
       - name: Run Renovate CUDA manager tests
         run: go test . -run 'TestRenovate|TestUnifiedDocker' -count=1 -v
