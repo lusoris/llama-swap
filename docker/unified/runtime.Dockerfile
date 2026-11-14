@@ -27,7 +27,7 @@ FROM ${LLAMA_IMAGE} AS llama-src
 # COPY below always has a real (if empty) /install/bin and needs no backend
 # branching. build-image.sh passes a real artifacts image for every backend
 # it drives, and BuildKit prunes this stage when it does.
-FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852 AS ik-llama-empty
+FROM ubuntu:24.04@sha256:2198e4c65076e9cb0b3d695219df667c0e3b0072da64ca3c2648aca17dcecaf5 AS ik-llama-empty
 RUN mkdir -p /install/bin
 FROM ${IK_LLAMA_IMAGE} AS ik-llama-src
 
@@ -93,7 +93,7 @@ COPY --from=cuda-stubs /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/li
 
 # ──
 
-FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852 AS runtime-vulkan
+FROM ubuntu:24.04@sha256:2198e4c65076e9cb0b3d695219df667c0e3b0072da64ca3c2648aca17dcecaf5 AS runtime-vulkan
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/usr/local/bin:${PATH}"
