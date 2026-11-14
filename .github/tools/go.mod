@@ -1,6 +1,6 @@
 module github.com/mostlygeek/llama-swap/.github/tools
 
-go 1.27.3
+go 1.27.4
 
 tool (
 	github.com/fzipp/gocyclo/cmd/gocyclo
