@@ -1,2 +1,2 @@
 # semgrep for .github/workflows/semgrep.yml, installed into its own venv.
-semgrep==1.183.0
+semgrep==1.185.0
