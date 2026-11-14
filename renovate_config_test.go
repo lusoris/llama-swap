@@ -30,6 +30,8 @@ type renovatePackageRule struct {
 	MatchFileNames    []string          `json:"matchFileNames"`
 	MatchPackageNames []string          `json:"matchPackageNames"`
 	MatchDepNames     []string          `json:"matchDepNames"`
+	MatchDepTypes     []string          `json:"matchDepTypes"`
+	RangeStrategy     string            `json:"rangeStrategy"`
 	MatchUpdateTypes  []string          `json:"matchUpdateTypes"`
 	MatchManagers     []string          `json:"matchManagers"`
 	Constraints       map[string]string `json:"constraints"`
@@ -454,6 +456,56 @@ func checkNpmArtifactStepPinnedBelow12(rules []renovatePackageRule) error {
 		return fmt.Errorf("expected exactly one rule with matchManagers containing \"npm\" and constraints[\"npm\"] == \">=11 <12\", found %d (rule indices: %v)", len(matchingIndices), matchingIndices)
 	}
 	return nil
+}
+
+func checkGoDirectiveBumped(rules []renovatePackageRule) error {
+	var matchingIndices []int
+	for idx, rule := range rules {
+		if slices.Contains(rule.MatchManagers, "gomod") &&
+			slices.Contains(rule.MatchDepNames, "go") &&
+			slices.Contains(rule.MatchDepTypes, "golang") && rule.RangeStrategy == "bump" {
+			matchingIndices = append(matchingIndices, idx)
+		}
+	}
+	if len(matchingIndices) != 1 {
+		return fmt.Errorf("expected exactly one gomod rule for go with depType golang and rangeStrategy bump, found %d (rule indices: %v)", len(matchingIndices), matchingIndices)
+	}
+	return nil
+}
+
+func TestRenovate_GoDirectiveBumped(t *testing.T) {
+	cfg := loadRenovateConfig(t, "renovate.json")
+	if err := checkGoDirectiveBumped(cfg.PackageRules); err != nil {
+		t.Fatalf("renovate.json: %v", err)
+	}
+
+	t.Run("NegativeCases", func(t *testing.T) {
+		valid := renovatePackageRule{
+			MatchManagers: []string{"gomod"}, MatchDepNames: []string{"go"},
+			MatchDepTypes: []string{"golang"}, RangeStrategy: "bump",
+		}
+		wrongManager, missingDepType, wrongRangeStrategy := valid, valid, valid
+		wrongManager.MatchManagers = []string{"npm"}
+		missingDepType.MatchDepTypes = nil
+		wrongRangeStrategy.RangeStrategy = "replace"
+		cases := []struct {
+			name  string
+			rules []renovatePackageRule
+		}{
+			{name: "no_rules", rules: nil},
+			{name: "wrong_manager", rules: []renovatePackageRule{wrongManager}},
+			{name: "missing_dep_type", rules: []renovatePackageRule{missingDepType}},
+			{name: "wrong_range_strategy", rules: []renovatePackageRule{wrongRangeStrategy}},
+			{name: "duplicate_rules", rules: []renovatePackageRule{valid, valid}},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				if err := checkGoDirectiveBumped(tc.rules); err == nil {
+					t.Errorf("expected error for negative case %q, got nil", tc.name)
+				}
+			})
+		}
+	})
 }
 
 func TestRenovate_NpmArtifactStepPinnedBelow12(t *testing.T) {

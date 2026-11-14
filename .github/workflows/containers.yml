@@ -20,6 +20,7 @@ on:
     paths:
       - '.github/workflows/containers.yml'
       - 'docker/build-container.sh'
+      - 'docker/llama-tag.sh'
       - 'docker/*.Containerfile'
 
 # grant permissions on GITHUB_TOKEN to publish packages

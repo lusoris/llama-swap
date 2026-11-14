@@ -4,6 +4,8 @@ set -euo pipefail
 
 cd $(dirname "$0")
 
+source ./llama-tag.sh
+
 # use this to test locally, example:
 # GITHUB_TOKEN=$(gh auth token) LOG_DEBUG=1 DEBUG_ABORT_BUILD=1 ./docker/build-container.sh rocm
 # you need read:package scope on the token. Generate a personal access token with
@@ -15,7 +17,7 @@ DEBUG_ABORT_BUILD=${DEBUG_ABORT_BUILD:-}
 
 log_debug() {
     if [ "$LOG_DEBUG" = "1" ]; then
-        echo "[DEBUG] $*"
+        echo "[DEBUG] $*" >&2
     fi
 }
 
@@ -105,13 +107,10 @@ fetch_llama_tag() {
         fi
 
         # Extract matching tag from this page
-        local found_tag=$(echo "$response" | jq -r \
-            ".[] | select(.metadata.container.tags[]? | startswith(\"$tag_prefix\")) | .metadata.container.tags[] | select(startswith(\"$tag_prefix\"))" \
-            | sort -r | head -n1)
-
-        if [ -n "$found_tag" ]; then
-            log_debug "Found tag: $found_tag on page $page"
-            echo "$found_tag" | awk -F '-' '{print $NF}'
+        local found_tag
+        if found_tag=$(echo "$response" | pick_llama_tag "$tag_prefix"); then
+            log_debug "Found tag: ${tag_prefix}-${found_tag} on page $page"
+            echo "$found_tag"
             return 0
         fi
 

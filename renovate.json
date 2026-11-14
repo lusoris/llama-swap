@@ -75,6 +75,19 @@
         "python"
       ],
       "allowedVersions": "<3.15"
+    },
+    {
+      "description": "Renovate leaves the go directive alone by default; bump it so Go patch releases with standard library security fixes arrive as Renovate PRs",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepNames": [
+        "go"
+      ],
+      "matchDepTypes": [
+        "golang"
+      ],
+      "rangeStrategy": "bump"
     }
   ]
 }
