@@ -72,6 +72,21 @@ printf '%s\n' \
   "echo \"\$x\" && $e \"\$cmd\"" \
   > "$plant/hiss-08-shell.sh"
 
+# The suppression marker is assembled so this file does not carry one.
+ns="#no""sec"
+printf '%s\n' \
+  'package hiss' '' 'import "os/exec"' '' \
+  'func run(p string) error {' \
+  '	// ruleid: nosec-without-reason' \
+  "	_ = exec.Command(p).Run() // $ns" \
+  '	// ruleid: nosec-without-reason' \
+  "	_ = exec.Command(p).Run() // $ns G204" \
+  '	// ruleid: nosec-without-reason' \
+  "	_ = exec.Command(p).Run() // $ns -- operator config" \
+  '	// ok: nosec-without-reason' \
+  "	return exec.Command(p).Run() // $ns G204,G702 -- operator config argv, no shell" '}' \
+  > "$plant/suppression-reason.go"
+
 # semgrep skips a fixture without a rule file of the same name, and a rule
 # file without a fixture, so each must have its partner.
 unpaired=0

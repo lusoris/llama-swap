@@ -875,3 +875,29 @@ func TestProcessCommand_ConcurrentRunStop(t *testing.T) {
 		}
 	}
 }
+
+// TestProcessCommand_DetachedContextPreservesValues verifies that detachedCtx
+// preserves context values from parentCtx after parentCtx is cancelled, and is
+// not cancelled when parentCtx is cancelled.
+func TestProcessCommand_DetachedContextPreservesValues(t *testing.T) {
+	type ctxKey struct{}
+	parentCtx, cancelParent := context.WithCancel(context.WithValue(context.Background(), ctxKey{}, "value-123"))
+
+	logger := logmon.NewWriter(io.Discard)
+	p, err := New(parentCtx, t.Name(), config.ModelConfig{}, logger, logger)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	cancelParent()
+
+	if val := p.detachedCtx.Value(ctxKey{}); val != "value-123" {
+		t.Errorf("detachedCtx value lost: got %v, want %q", val, "value-123")
+	}
+
+	select {
+	case <-p.detachedCtx.Done():
+		t.Errorf("detachedCtx was cancelled when parentCtx was cancelled; expected not Done")
+	default:
+	}
+}
