@@ -1,5 +1,6 @@
 #!/usr/bin/env tsx
 import { parseArgs } from "node:util";
+import { realpathSync } from "node:fs";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,12 +14,22 @@ import {
   type RunRecord,
   type ToolInvocation,
   type CaseResult,
+  type SuiteSummary,
 } from "./grade";
 import { formatSummary, formatCaseLine, formatFailureReport } from "./report";
-import { judgeCase, summarizeJudge, type JudgeVerdict } from "./judge";
+import {
+  judgeCase,
+  summarizeJudge,
+  type JudgeOptions,
+  type JudgeVerdict,
+} from "./judge";
 import { recordRun, evaluateStop, DEFAULT_HISTORY } from "./history";
 
-import { runAgent, DEFAULT_MAX_ITERATIONS } from "../lib/agentLoop";
+import {
+  runAgent,
+  DEFAULT_MAX_ITERATIONS,
+  type AgentEvent,
+} from "../lib/agentLoop";
 import { streamChatCompletion } from "../lib/chatApi";
 import { fetchToolDefinitions, callTool } from "../lib/agentTools";
 import { DOCS_AGENT_SYSTEM_PROMPT } from "../lib/prompts/docsAgent";
@@ -33,7 +44,8 @@ import type { ChatMessage } from "../lib/types";
  * outside src/lib for that reason. See evals/docs-agent/README.md.
  */
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const SELF = fileURLToPath(import.meta.url);
+const HERE = path.dirname(SELF);
 const REPO_ROOT = path.resolve(HERE, "../../..");
 const DEFAULT_CASES = path.join(REPO_ROOT, "evals/docs-agent/cases");
 const DEFAULT_RUNS = path.join(REPO_ROOT, "evals/docs-agent/runs");
@@ -43,9 +55,23 @@ const DEFAULT_MODEL = process.env.DOCS_AGENT_MODEL ?? "sippy/gemma-4-12B";
 const DEFAULT_JUDGE_MODEL =
   process.env.DOCS_AGENT_JUDGE_MODEL ?? "sippy/gptoss-120B";
 
+export class CliError extends Error {
+  readonly exitCode: number;
+  constructor(message: string, exitCode = 1) {
+    super(message);
+    this.name = "CliError";
+    this.exitCode = exitCode;
+  }
+}
+
 function die(message: string, code = 1): never {
+  throw new CliError(message, code);
+}
+
+export function reportCliError(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
   process.stderr.write(`error: ${message}\n`);
-  process.exit(code);
+  process.exitCode = error instanceof CliError ? error.exitCode : 1;
 }
 
 const USAGE = `Usage: npm run agent -- <command> [options]
@@ -198,10 +224,64 @@ async function preflight(opts: CommonOpts) {
   return tools;
 }
 
+type ToolSet = Awaited<ReturnType<typeof preflight>>;
+
+export interface RunState {
+  answer: string;
+  reasoning: string;
+  iterations: number;
+  doneReason: string;
+  error?: string;
+  toolCalls: ToolInvocation[];
+}
+
+export function applyAgentEvent(
+  state: RunState,
+  event: AgentEvent,
+  onDelta?: (text: string) => void,
+): void {
+  switch (event.type) {
+    case "iteration":
+      state.iterations = event.n;
+      break;
+    case "content":
+      state.answer += event.delta;
+      onDelta?.(event.delta);
+      break;
+    case "reasoning":
+      state.reasoning += event.delta;
+      break;
+    case "assistant_end":
+      // Only the final assistant message is the answer; earlier ones are
+      // the model narrating its tool use.
+      if (
+        !event.message.tool_calls?.length &&
+        typeof event.message.content === "string"
+      ) {
+        state.answer = event.message.content;
+      }
+      break;
+    case "tool_end":
+      state.toolCalls.push({
+        name: event.call.function.name,
+        args: event.call.function.arguments,
+        ok: event.ok,
+        durationMs: event.durationMs,
+      });
+      break;
+    case "error":
+      state.error = event.message;
+      break;
+    case "done":
+      state.doneReason = event.reason;
+      break;
+  }
+}
+
 async function runOnce(
   question: string,
   opts: CommonOpts,
-  tools: Awaited<ReturnType<typeof preflight>>,
+  tools: ToolSet,
   onDelta?: (text: string) => void,
 ): Promise<RunRecord> {
   const seed: ChatMessage[] = [];
@@ -212,14 +292,13 @@ async function runOnce(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
   const startedAt = Date.now();
-
-  let answer = "";
-  let reasoning = "";
-  let iterations = 0;
-  let doneReason = "error";
-  let error: string | undefined;
-  const toolCalls: ToolInvocation[] = [];
-
+  const state: RunState = {
+    answer: "",
+    reasoning: "",
+    iterations: 0,
+    doneReason: "error",
+    toolCalls: [],
+  };
   try {
     const deps = {
       streamChat: (msgs: ChatMessage[], signal: AbortSignal) =>
@@ -230,65 +309,23 @@ async function runOnce(
         }),
       callTool,
     };
-
     for await (const event of runAgent(seed, deps, {
       maxIterations: opts.maxIterations,
       signal: controller.signal,
     })) {
-      switch (event.type) {
-        case "iteration":
-          iterations = event.n;
-          break;
-        case "content":
-          answer += event.delta;
-          onDelta?.(event.delta);
-          break;
-        case "reasoning":
-          reasoning += event.delta;
-          break;
-        case "assistant_end":
-          // Only the final assistant message is the answer; earlier ones are
-          // the model narrating its tool use.
-          if (
-            !event.message.tool_calls?.length &&
-            typeof event.message.content === "string"
-          ) {
-            answer = event.message.content;
-          }
-          break;
-        case "tool_end":
-          toolCalls.push({
-            name: event.call.function.name,
-            args: event.call.function.arguments,
-            ok: event.ok,
-            durationMs: event.durationMs,
-          });
-          break;
-        case "error":
-          error = event.message;
-          break;
-        case "done":
-          doneReason = event.reason;
-          break;
-      }
+      applyAgentEvent(state, event, onDelta);
     }
   } finally {
     clearTimeout(timer);
   }
-
-  if (doneReason === "aborted" && !error)
-    error = `timed out after ${opts.timeoutMs / 1000}s`;
-
+  if (state.doneReason === "aborted" && !state.error)
+    state.error = `timed out after ${opts.timeoutMs / 1000}s`;
   return {
     caseId: "",
     attempt: 1,
-    answer,
-    reasoning,
-    toolCalls,
-    iterations,
-    doneReason,
+    ...state,
     durationMs: Date.now() - startedAt,
-    error,
+    error: state.error,
   };
 }
 
@@ -328,24 +365,52 @@ async function cmdAsk(question: string, values: CLIValues) {
   }
 }
 
-async function cmdEval(values: CLIValues) {
-  const opts = await common(values);
-  const casesDir = (values.cases as string) ?? DEFAULT_CASES;
-  const repeat = intOpt(values.repeat as string, 1, "--repeat");
-  const concurrency = positiveIntOpt(
-    values.concurrency as string,
-    1,
-    "--concurrency",
-  );
-  const label = (values.label as string) ?? "run";
+interface EvalOpts {
+  casesDir: string;
+  repeat: number;
+  concurrency: number;
+  label: string;
+  groups: string[];
+  only: string | undefined;
+  out: string | undefined;
+  report: string | undefined;
+  noHistory: boolean;
+  historyFile: string;
+  stopAfter: string | undefined;
+}
 
-  let cases = await loadCases(casesDir);
+function parseEvalOpts(values: CLIValues): EvalOpts {
   const groups =
     values.group === undefined
       ? []
       : Array.isArray(values.group)
         ? (values.group as string[])
         : [values.group as string];
+  return {
+    casesDir: (values.cases as string) ?? DEFAULT_CASES,
+    repeat: intOpt(values.repeat as string, 1, "--repeat"),
+    concurrency: positiveIntOpt(
+      values.concurrency as string,
+      1,
+      "--concurrency",
+    ),
+    label: (values.label as string) ?? "run",
+    groups,
+    only: values.only as string | undefined,
+    out: values.out as string | undefined,
+    report: values.report as string | undefined,
+    noHistory: Boolean(values["no-history"]),
+    historyFile: (values.history as string) ?? DEFAULT_HISTORY,
+    stopAfter: values["stop-after"] as string | undefined,
+  };
+}
+
+async function selectEvalCases(
+  casesDir: string,
+  groups: string[],
+  only: string | undefined,
+): Promise<EvalCase[]> {
+  let cases = await loadCases(casesDir);
   const availableGroups = [...new Set(cases.map((c) => c.group))].sort();
   if (groups.length) {
     const unknown = groups.filter((group) => !availableGroups.includes(group));
@@ -359,17 +424,152 @@ async function cmdEval(values: CLIValues) {
         `--group selected no cases; available groups: ${availableGroups.join(", ")}`,
       );
   }
-  if (values.only) {
-    const pattern = new RegExp(values.only as string);
+  if (only) {
+    // False positive: --only is the operator's own regex argument to this local
+    // eval CLI, so no untrusted input reaches the RegExp constructor.
+    // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp, javascript_dos_rule-non-literal-regexp, gitlab.eslint.detect-non-literal-regexp
+    const pattern = new RegExp(only);
     cases = cases.filter((c) => pattern.test(c.id));
-    if (!cases.length) die(`--only ${values.only} matched no cases`);
+    if (!cases.length) die(`--only ${only} matched no cases`);
   }
+  return cases;
+}
 
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+async function runEvalCases(
+  cases: EvalCase[],
+  repeat: number,
+  concurrency: number,
+  opts: CommonOpts,
+  tools: ToolSet,
+): Promise<CaseResult[]> {
+  let nextCase = 0;
+  const results: CaseResult[] = new Array(cases.length);
+  const worker = async () => {
+    while (nextCase < cases.length) {
+      const index = nextCase++;
+      const c = cases[index];
+      if (!c) continue;
+
+      const runs = [];
+      for (let attempt = 1; attempt <= repeat; attempt++) {
+        const record = await runOnce(c.question, opts, tools);
+        runs.push(gradeRun(c, { ...record, caseId: c.id, attempt }));
+      }
+      const result = summarizeCase(c, runs);
+      results[index] = result;
+      process.stderr.write(
+        `[${String(index + 1).padStart(3)}/${cases.length}]${formatCaseLine(result)}\n`,
+      );
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, cases.length) }, worker),
+  );
+  return results;
+}
+
+async function writeEvalArtifacts(
+  evalOpts: EvalOpts,
+  opts: CommonOpts,
+  stamp: string,
+  summary: SuiteSummary,
+  results: CaseResult[],
+): Promise<void> {
   const outPath =
-    (values.out as string) ?? path.join(DEFAULT_RUNS, `${stamp}-${label}.json`);
+    evalOpts.out ?? path.join(DEFAULT_RUNS, `${stamp}-${evalOpts.label}.json`);
   const reportPath =
-    (values.report as string) ?? outPath.replace(/\.json$/, "") + ".md";
+    evalOpts.report ?? outPath.replace(/\.json$/, "") + ".md";
+
+  await mkdir(path.dirname(outPath), { recursive: true });
+  await writeFile(
+    outPath,
+    JSON.stringify(
+      {
+        label: evalOpts.label,
+        startedAt: stamp,
+        model: opts.model,
+        baseUrl: opts.baseUrl,
+        systemPromptSource: opts.systemPromptSource,
+        systemPrompt: opts.systemPrompt,
+        casesDir: evalOpts.casesDir,
+        groups: evalOpts.groups,
+        repeat: evalOpts.repeat,
+        concurrency: evalOpts.concurrency,
+        summary,
+        results,
+      },
+      null,
+      2,
+    ),
+  );
+  await writeFile(
+    reportPath,
+    formatFailureReport({
+      label: evalOpts.label,
+      model: opts.model,
+      baseUrl: opts.baseUrl,
+      systemPromptSource: opts.systemPromptSource,
+      groups: evalOpts.groups,
+      summary,
+      results,
+    }),
+  );
+  process.stderr.write(
+    `results  ${path.relative(process.cwd(), outPath)}\nfailures ${path.relative(process.cwd(), reportPath)}\n`,
+  );
+}
+
+async function recordEvalHistory(
+  evalOpts: EvalOpts,
+  opts: CommonOpts,
+  summary: SuiteSummary,
+  results: CaseResult[],
+): Promise<void> {
+  const rows = await recordRun(evalOpts.historyFile, {
+    timestamp: new Date().toISOString(),
+    label: evalOpts.label,
+    repeat: evalOpts.repeat,
+    model: opts.model,
+    casesDir: evalOpts.casesDir,
+    promptSource: opts.systemPromptSource,
+    summary,
+    results,
+    only: evalOpts.only,
+    groups: evalOpts.groups,
+  });
+  process.stderr.write(`history  ${evalOpts.historyFile}\n`);
+
+  // The loop is long and spans sessions, so the stop rule is evaluated
+  // from the durable log rather than from anything held in memory.
+  const limit = intOpt(evalOpts.stopAfter, 5, "--stop-after");
+  const stop = evaluateStop(
+    rows,
+    evalOpts.casesDir,
+    limit,
+    evalOpts.only,
+    evalOpts.groups,
+  );
+  if (stop.shouldStop) {
+    process.stderr.write(
+      `\n  STOP: ${stop.sinceBest} runs in a row have not beaten ${(stop.best * 100).toFixed(1)}% (${stop.bestLabel}).\n` +
+        `  Diminishing returns on ${path.basename(evalOpts.casesDir)}. Report what was tried and stop tuning.\n`,
+    );
+  } else if (stop.sinceBest > 0) {
+    process.stderr.write(
+      `  best ${(stop.best * 100).toFixed(1)}% (${stop.bestLabel}); ${stop.sinceBest}/${limit} runs since it was beaten\n`,
+    );
+  }
+}
+
+async function cmdEval(values: CLIValues) {
+  const opts = await common(values);
+  const evalOpts = parseEvalOpts(values);
+  const cases = await selectEvalCases(
+    evalOpts.casesDir,
+    evalOpts.groups,
+    evalOpts.only,
+  );
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 
   const restore = installFetchBase({
     baseUrl: opts.baseUrl,
@@ -378,112 +578,23 @@ async function cmdEval(values: CLIValues) {
   try {
     const tools = await preflight(opts);
     process.stderr.write(
-      `${cases.length} cases x ${repeat}, concurrency ${concurrency} against ${opts.model} @ ${opts.baseUrl}\n` +
+      `${cases.length} cases x ${evalOpts.repeat}, concurrency ${evalOpts.concurrency} against ${opts.model} @ ${opts.baseUrl}\n` +
         `${tools.length} tools, prompt: ${opts.systemPromptSource}\n\n`,
     );
 
-    let nextCase = 0;
-    const results: CaseResult[] = new Array(cases.length);
-    const worker = async () => {
-      while (nextCase < cases.length) {
-        const index = nextCase++;
-        const c = cases[index];
-        if (!c) continue;
-
-        const runs = [];
-        for (let attempt = 1; attempt <= repeat; attempt++) {
-          const record = await runOnce(c.question, opts, tools);
-          runs.push(gradeRun(c, { ...record, caseId: c.id, attempt }));
-        }
-        const result = summarizeCase(c, runs);
-        results[index] = result;
-        process.stderr.write(
-          `[${String(index + 1).padStart(3)}/${cases.length}]${formatCaseLine(result)}\n`,
-        );
-      }
-    };
-    await Promise.all(
-      Array.from({ length: Math.min(concurrency, cases.length) }, worker),
+    const results = await runEvalCases(
+      cases,
+      evalOpts.repeat,
+      evalOpts.concurrency,
+      opts,
+      tools,
     );
-
     const summary = summarizeSuite(results);
-    process.stderr.write(formatSummary(summary, label));
+    process.stderr.write(formatSummary(summary, evalOpts.label));
 
-    await mkdir(path.dirname(outPath), { recursive: true });
-    await writeFile(
-      outPath,
-      JSON.stringify(
-        {
-          label,
-          startedAt: stamp,
-          model: opts.model,
-          baseUrl: opts.baseUrl,
-          systemPromptSource: opts.systemPromptSource,
-          systemPrompt: opts.systemPrompt,
-          casesDir,
-          groups,
-          repeat,
-          concurrency,
-          summary,
-          results,
-        },
-        null,
-        2,
-      ),
-    );
-    await writeFile(
-      reportPath,
-      formatFailureReport({
-        label,
-        model: opts.model,
-        baseUrl: opts.baseUrl,
-        systemPromptSource: opts.systemPromptSource,
-        groups,
-        summary,
-        results,
-      }),
-    );
-
-    process.stderr.write(
-      `results  ${path.relative(process.cwd(), outPath)}\nfailures ${path.relative(process.cwd(), reportPath)}\n`,
-    );
-
-    if (!values["no-history"]) {
-      const historyFile = (values.history as string) ?? DEFAULT_HISTORY;
-      const rows = await recordRun(historyFile, {
-        timestamp: new Date().toISOString(),
-        label,
-        repeat,
-        model: opts.model,
-        casesDir,
-        promptSource: opts.systemPromptSource,
-        summary,
-        results,
-        only: values.only as string | undefined,
-        groups,
-      });
-      process.stderr.write(`history  ${historyFile}\n`);
-
-      // The loop is long and spans sessions, so the stop rule is evaluated
-      // from the durable log rather than from anything held in memory.
-      const limit = intOpt(values["stop-after"] as string, 5, "--stop-after");
-      const stop = evaluateStop(
-        rows,
-        casesDir,
-        limit,
-        values.only as string | undefined,
-        groups,
-      );
-      if (stop.shouldStop) {
-        process.stderr.write(
-          `\n  STOP: ${stop.sinceBest} runs in a row have not beaten ${(stop.best * 100).toFixed(1)}% (${stop.bestLabel}).\n` +
-            `  Diminishing returns on ${path.basename(casesDir)}. Report what was tried and stop tuning.\n`,
-        );
-      } else if (stop.sinceBest > 0) {
-        process.stderr.write(
-          `  best ${(stop.best * 100).toFixed(1)}% (${stop.bestLabel}); ${stop.sinceBest}/${limit} runs since it was beaten\n`,
-        );
-      }
+    await writeEvalArtifacts(evalOpts, opts, stamp, summary, results);
+    if (!evalOpts.noHistory) {
+      await recordEvalHistory(evalOpts, opts, summary, results);
     }
     process.stderr.write("\n");
   } finally {
@@ -491,41 +602,37 @@ async function cmdEval(values: CLIValues) {
   }
 }
 
-async function cmdJudge(values: CLIValues) {
-  const resultsPath = values.results as string | undefined;
-  if (!resultsPath) die("--results is required");
+interface SavedEvalResults {
+  model: string;
+  casesDir: string;
+  groups?: string[];
+  summary: { passRate: number };
+  results: CaseResult[];
+}
 
-  const saved = JSON.parse(await readFile(resultsPath, "utf8")) as {
-    model: string;
-    casesDir: string;
-    groups?: string[];
-    summary: { passRate: number };
-    results: CaseResult[];
-  };
-
-  const minScore = intOpt(values["min-score"] as string, 0, "--min-score");
-  if (saved.summary.passRate < minScore) {
+function checkMinScore(passRate: number, rawMinScore: string | undefined): void {
+  const minScore = intOpt(rawMinScore, 0, "--min-score");
+  if (passRate < minScore) {
     die(
-      `deterministic pass rate ${(saved.summary.passRate * 100).toFixed(1)}% is below --min-score ${(minScore * 100).toFixed(1)}%.\n` +
+      `deterministic pass rate ${(passRate * 100).toFixed(1)}% is below --min-score ${(minScore * 100).toFixed(1)}%.\n` +
         `  Fix the failing assertions before spending judge tokens.`,
       2,
     );
   }
+}
 
+function parseJudgeOpts(values: CLIValues, agentModel: string): JudgeOptions {
   const baseUrl =
     (values["judge-base-url"] as string) ??
     (values["base-url"] as string) ??
     DEFAULT_BASE_URL;
   const judgeModel = (values["judge-model"] as string) ?? DEFAULT_JUDGE_MODEL;
-  if (judgeModel === saved.model) {
+  if (judgeModel === agentModel) {
     die(
       `--judge-model is the same as the agent model (${judgeModel}); a model grading itself ratifies its own mistakes`,
     );
   }
-
-  const cases = await loadCases(saved.casesDir);
-  const byId = new Map(cases.map((c) => [c.id, c]));
-  const judgeOpts = {
+  return {
     baseUrl,
     model: judgeModel,
     apiKey:
@@ -533,14 +640,13 @@ async function cmdJudge(values: CLIValues) {
       (values["api-key"] as string | undefined),
     timeoutMs: intOpt(values.timeout as string, 300, "--timeout") * 1000,
   };
+}
 
-  const judgeable = saved.results.filter(
-    (r) => (byId.get(r.caseId)?.rubric.length ?? 0) > 0,
-  );
-  process.stderr.write(
-    `judging ${judgeable.length} cases with ${judgeModel} @ ${baseUrl}\n\n`,
-  );
-
+async function runJudgeCases(
+  judgeable: CaseResult[],
+  byId: Map<string, EvalCase>,
+  judgeOpts: JudgeOptions,
+): Promise<JudgeVerdict[]> {
   const verdicts: JudgeVerdict[] = [];
   for (const [index, result] of judgeable.entries()) {
     const c = byId.get(result.caseId) as EvalCase;
@@ -552,7 +658,32 @@ async function cmdJudge(values: CLIValues) {
         `${verdict.error ? `  <- ${verdict.error}` : ""}\n`,
     );
   }
+  return verdicts;
+}
 
+async function cmdJudge(values: CLIValues) {
+  const resultsPath = values.results as string | undefined;
+  if (!resultsPath) die("--results is required");
+
+  const saved = JSON.parse(
+    await readFile(resultsPath, "utf8"),
+  ) as SavedEvalResults;
+  checkMinScore(
+    saved.summary.passRate,
+    values["min-score"] as string | undefined,
+  );
+  const judgeOpts = parseJudgeOpts(values, saved.model);
+
+  const cases = await loadCases(saved.casesDir);
+  const byId = new Map(cases.map((c) => [c.id, c]));
+  const judgeable = saved.results.filter(
+    (r) => (byId.get(r.caseId)?.rubric.length ?? 0) > 0,
+  );
+  process.stderr.write(
+    `judging ${judgeable.length} cases with ${judgeOpts.model} @ ${judgeOpts.baseUrl}\n\n`,
+  );
+
+  const verdicts = await runJudgeCases(judgeable, byId, judgeOpts);
   const summary = summarizeJudge(verdicts);
   process.stderr.write(
     `\n  mean score       ${summary.meanScore.toFixed(2)}/5\n` +
@@ -560,15 +691,19 @@ async function cmdJudge(values: CLIValues) {
       `  judge errors     ${summary.errors}\n\n`,
   );
 
-  const merged = { ...saved, judge: { model: judgeModel, summary, verdicts } };
+  const merged = {
+    ...saved,
+    judge: { model: judgeOpts.model, summary, verdicts },
+  };
   await writeFile(resultsPath, JSON.stringify(merged, null, 2));
   process.stderr.write(
     `merged into ${path.relative(process.cwd(), resultsPath)}\n`,
   );
 }
 
-async function main() {
-  const { values, positionals } = parseArgs({
+function parseCliArgs(args: string[]) {
+  return parseArgs({
+    args,
     allowPositionals: true,
     strict: true,
     options: {
@@ -599,6 +734,12 @@ async function main() {
       help: { type: "boolean", short: "h" },
     },
   });
+}
+
+export async function main(
+  args: string[] = process.argv.slice(2),
+): Promise<void> {
+  const { values, positionals } = parseCliArgs(args);
 
   if (values.help || !positionals.length) {
     process.stdout.write(USAGE);
@@ -621,6 +762,20 @@ async function main() {
   }
 }
 
-main().catch((error) =>
-  die(error instanceof Error ? error.message : String(error)),
-);
+// Compares real paths so a run through a symlinked checkout still starts the
+// CLI, while importing this module (tests) never does.
+export function isEntryPoint(
+  entry: string | undefined,
+  self: string,
+): boolean {
+  if (entry === undefined) return false;
+  try {
+    return realpathSync(entry) === realpathSync(self);
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint(process.argv[1], SELF)) {
+  main().catch(reportCliError);
+}

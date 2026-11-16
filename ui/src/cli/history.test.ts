@@ -1,14 +1,27 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   evaluateStop,
   toRow,
   renderRow,
   parseRow,
+  recordRun,
   renderNarrative,
   setName,
   type HistoryRow,
   type HistoryEntry,
 } from "./history";
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    readFile: vi.fn(actual.readFile),
+    writeFile: vi.fn(actual.writeFile),
+  };
+});
 
 const summary = {
   cases: 39,
@@ -214,5 +227,42 @@ describe("subset runs", () => {
         "routing",
       ]).best,
     ).toBeCloseTo(0.9);
+  });
+});
+
+describe("recordRun", () => {
+  it("treats ENOENT as an empty history on the first run and appends next", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "llama-swap-history-"));
+    try {
+      const file = path.join(dir, "history.md");
+      const first = await recordRun(file, entry({ label: "run-1" }));
+      expect(first).toHaveLength(1);
+      expect(first[0].index).toBe(1);
+      expect(first[0].label).toBe("run-1");
+
+      const second = await recordRun(file, entry({ label: "run-2" }));
+      expect(second.map((r) => r.label)).toEqual(["run-1", "run-2"]);
+
+      const text = await readFile(file, "utf8");
+      expect(text).toContain("### 1. `run-1`");
+      expect(text).toContain("### 2. `run-2`");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rethrows readFile errors other than ENOENT", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "llama-swap-history-"));
+    try {
+      const file = path.join(dir, "history.md");
+      vi.mocked(writeFile).mockClear();
+      vi.mocked(readFile).mockRejectedValueOnce(
+        Object.assign(new Error("EIO: i/o error, read"), { code: "EIO" }),
+      );
+      await expect(recordRun(file, entry())).rejects.toThrow(/EIO/);
+      expect(vi.mocked(writeFile)).not.toHaveBeenCalled();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

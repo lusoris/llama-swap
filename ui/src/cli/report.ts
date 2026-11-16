@@ -80,6 +80,39 @@ export interface ReportContext {
   results: CaseResult[];
 }
 
+function formatFailingCase(result: CaseResult): string[] {
+  const status = result.flaky
+    ? `flaky, passed ${result.passCount}/${result.attempts}`
+    : "failed";
+  // The first failing attempt is the informative one; the rest usually
+  // repeat it and only cost the reader context.
+  const run = result.runs.find((r) => !r.passed) ?? result.runs[0];
+  const out = [
+    `### \`${result.caseId}\` (${status})`,
+    "",
+    `**Q:** ${result.question}`,
+    "",
+    "**Failed assertions:**",
+    "",
+    ...run.assertions
+      .filter((x) => !x.ok)
+      .map((a) => `- \`${a.kind}\`: ${a.detail}`),
+    "",
+    "**Tools called:**",
+    "",
+    toolTrace(run),
+    "",
+    "**Answer:**",
+    "",
+    "```",
+    truncate(run.answer || "(empty)", 1200),
+    "```",
+    "",
+  ];
+  if (run.error) out.push(`**Turn error:** ${run.error}`, "");
+  return out;
+}
+
 /** A markdown digest of the failures, for the harness to read. */
 export function formatFailureReport(ctx: ReportContext): string {
   const failing = ctx.results.filter((r) => r.passCount < r.attempts);
@@ -112,40 +145,8 @@ export function formatFailureReport(ctx: ReportContext): string {
     `## ${failing.length} failing case${failing.length === 1 ? "" : "s"}`,
     "",
   );
-
   for (const result of failing) {
-    const status = result.flaky
-      ? `flaky, passed ${result.passCount}/${result.attempts}`
-      : "failed";
-    out.push(
-      `### \`${result.caseId}\` (${status})`,
-      "",
-      `**Q:** ${result.question}`,
-      "",
-    );
-
-    // The first failing attempt is the informative one; the rest usually
-    // repeat it and only cost the reader context.
-    const run = result.runs.find((r) => !r.passed) ?? result.runs[0];
-
-    out.push("**Failed assertions:**", "");
-    for (const a of run.assertions.filter((x) => !x.ok)) {
-      out.push(`- \`${a.kind}\`: ${a.detail}`);
-    }
-    out.push(
-      "",
-      "**Tools called:**",
-      "",
-      toolTrace(run),
-      "",
-      "**Answer:**",
-      "",
-      "```",
-      truncate(run.answer || "(empty)", 1200),
-      "```",
-      "",
-    );
-    if (run.error) out.push(`**Turn error:** ${run.error}`, "");
+    out.push(...formatFailingCase(result));
   }
 
   return out.join("\n");

@@ -163,44 +163,7 @@ function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-/**
- * A plain-English account of one run, built from its own results.
- *
- * Deliberately mechanical: it reports what the numbers and the failing cases
- * say and nothing more, so an entry written months ago can still be trusted.
- */
-export function renderNarrative(
-  entry: HistoryEntry,
-  index: number,
-  previous?: HistoryRow,
-): string {
-  const s = entry.summary;
-  const failing = entry.results.filter((r) => r.passCount < r.attempts);
-  const out: string[] = [];
-
-  out.push(
-    `### ${index}. \`${entry.label}\` — ${entry.model} — ${(s.passRate * 100).toFixed(1)}%`,
-    "",
-  );
-
-  const headline =
-    `Answered **${s.fullyPassing} of ${s.cases}** documentation questions correctly` +
-    `, taking ${(s.meanDurationMs / 1000).toFixed(1)}s and ${s.meanIterations.toFixed(1)} steps per question.`;
-  out.push(headline);
-
-  if (previous) {
-    const delta = (s.passRate - previous.passRate) * 100;
-    const comparison =
-      Math.abs(delta) < 0.05
-        ? "level with"
-        : `${Math.abs(delta).toFixed(1)} points ${delta > 0 ? "better than" : "worse than"}`;
-    out.push(
-      `That is ${comparison} the previous run (\`${previous.label}\`, ${(previous.passRate * 100).toFixed(1)}%` +
-        `${previous.model === entry.model ? "" : ` on ${previous.model}`}).`,
-    );
-  }
-  out.push("");
-
+function renderToolNotes(s: SuiteSummary): string {
   // How it used the tools. A model that answers from memory can score well and
   // still be the wrong thing to ship, so this gets its own line.
   const notes: string[] = [];
@@ -224,13 +187,13 @@ export function renderNarrative(
       `${plural(s.flaky, "question")} passed on some attempts and failed on others.`,
     );
   }
-  out.push(notes.join(" "), "");
+  return notes.join(" ");
+}
 
-  if (!failing.length) {
-    out.push("Nothing failed.", "");
-    return out.join("\n");
-  }
+function renderFailureNotes(failing: CaseResult[]): string[] {
+  if (!failing.length) return ["Nothing failed.", ""];
 
+  const out: string[] = [];
   // The abstention group is the one worth calling out by name: inventing a
   // config key is the failure that looks most like a good answer.
   const invented = failing.filter((r) => r.tags.includes("negative"));
@@ -249,8 +212,52 @@ export function renderNarrative(
       "",
     );
   }
+  return out;
+}
 
+/**
+ * A plain-English account of one run, built from its own results.
+ *
+ * Deliberately mechanical: it reports what the numbers and the failing cases
+ * say and nothing more, so an entry written months ago can still be trusted.
+ */
+export function renderNarrative(
+  entry: HistoryEntry,
+  index: number,
+  previous?: HistoryRow,
+): string {
+  const s = entry.summary;
+  const failing = entry.results.filter((r) => r.passCount < r.attempts);
+  const out: string[] = [
+    `### ${index}. \`${entry.label}\` — ${entry.model} — ${(s.passRate * 100).toFixed(1)}%`,
+    "",
+    `Answered **${s.fullyPassing} of ${s.cases}** documentation questions correctly` +
+      `, taking ${(s.meanDurationMs / 1000).toFixed(1)}s and ${s.meanIterations.toFixed(1)} steps per question.`,
+  ];
+
+  if (previous) {
+    const delta = (s.passRate - previous.passRate) * 100;
+    const comparison =
+      Math.abs(delta) < 0.05
+        ? "level with"
+        : `${Math.abs(delta).toFixed(1)} points ${delta > 0 ? "better than" : "worse than"}`;
+    out.push(
+      `That is ${comparison} the previous run (\`${previous.label}\`, ${(previous.passRate * 100).toFixed(1)}%` +
+        `${previous.model === entry.model ? "" : ` on ${previous.model}`}).`,
+    );
+  }
+
+  out.push("", renderToolNotes(s), "", ...renderFailureNotes(failing));
   return out.join("\n");
+}
+
+function isMissingFile(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as NodeJS.ErrnoException).code === "ENOENT"
+  );
 }
 
 /** Appends one run, rewriting the file so the table stays in one piece. */
@@ -258,17 +265,16 @@ export async function recordRun(
   file: string,
   entry: HistoryEntry,
 ): Promise<HistoryRow[]> {
-  let existingTable = "";
-  let existingNarratives = "";
+  let text = "";
   try {
-    const text = await readFile(file, "utf8");
-    const split = text.indexOf(RUNS_HEADING);
-    existingTable = split === -1 ? text : text.slice(0, split);
-    existingNarratives =
-      split === -1 ? "" : text.slice(split + RUNS_HEADING.length).trim();
-  } catch {
-    // First run; both halves stay empty.
+    text = await readFile(file, "utf8");
+  } catch (error) {
+    if (!isMissingFile(error)) throw error;
   }
+  const split = text.indexOf(RUNS_HEADING);
+  const existingTable = split === -1 ? text : text.slice(0, split);
+  const existingNarratives =
+    split === -1 ? "" : text.slice(split + RUNS_HEADING.length).trim();
 
   const rows = existingTable
     .split("\n")

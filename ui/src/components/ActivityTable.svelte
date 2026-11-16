@@ -337,7 +337,7 @@
     }
   }
 
-  function buildColumns(withModel: boolean, withSource: boolean): ColumnDef<ActivityLogEntry>[] {
+  function buildIdentityColumns(withModel: boolean, withSource: boolean): ColumnDef<ActivityLogEntry>[] {
     const cols: ColumnDef<ActivityLogEntry>[] = [
       {
         id: "id",
@@ -372,7 +372,11 @@
       });
     }
 
-    cols.push(
+    return cols;
+  }
+
+  function buildRequestAndTokenColumns(): ColumnDef<ActivityLogEntry>[] {
+    return [
       {
         id: "req_path",
         accessorKey: "req_path",
@@ -419,6 +423,11 @@
         cell: ({ row }) =>
           formatDrafted(row.original.tokens.draft_tokens, row.original.tokens.draft_acc_tokens),
       },
+    ];
+  }
+
+  function buildTimingAndActionColumns(): ColumnDef<ActivityLogEntry>[] {
+    return [
       {
         id: "prompt_speed",
         accessorFn: (row) => row.tokens.prompt_per_second,
@@ -454,9 +463,16 @@
         enableSorting: false,
         cell: ({ row }) =>
           renderComponent(MetaCell, { metadata: row.original.metadata }),
-      }
-    );
-    return cols;
+      },
+    ];
+  }
+
+  function buildColumns(withModel: boolean, withSource: boolean): ColumnDef<ActivityLogEntry>[] {
+    return [
+      ...buildIdentityColumns(withModel, withSource),
+      ...buildRequestAndTokenColumns(),
+      ...buildTimingAndActionColumns(),
+    ];
   }
 
   let columns = $derived(buildColumns(showModelColumn, showSourceColumn));
