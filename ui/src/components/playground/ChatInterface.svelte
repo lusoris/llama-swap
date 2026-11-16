@@ -155,7 +155,11 @@
     const json = JSON.stringify(messages);
     const elapsed = Date.now() - lastSaveTime;
     const save = () => {
-      try { localStorage.setItem("playground-messages", json); } catch {}
+      try {
+        localStorage.setItem("playground-messages", json);
+      } catch (e) {
+        console.error("Error saving value for playground-messages", e);
+      }
       lastSaveTime = Date.now();
     };
     if (elapsed >= 2000) {

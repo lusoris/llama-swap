@@ -1,9 +1,13 @@
 import { describe, it, expect } from "vitest";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   evaluateStop,
   toRow,
   renderRow,
   parseRow,
+  recordRun,
   renderNarrative,
   setName,
   type HistoryRow,
@@ -214,5 +218,36 @@ describe("subset runs", () => {
         "routing",
       ]).best,
     ).toBeCloseTo(0.9);
+  });
+});
+
+describe("recordRun", () => {
+  it("treats ENOENT as an empty history on the first run and appends next", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "llama-swap-history-"));
+    try {
+      const file = path.join(dir, "history.md");
+      const first = await recordRun(file, entry({ label: "run-1" }));
+      expect(first).toHaveLength(1);
+      expect(first[0].index).toBe(1);
+      expect(first[0].label).toBe("run-1");
+
+      const second = await recordRun(file, entry({ label: "run-2" }));
+      expect(second.map((r) => r.label)).toEqual(["run-1", "run-2"]);
+
+      const text = await readFile(file, "utf8");
+      expect(text).toContain("### 1. `run-1`");
+      expect(text).toContain("### 2. `run-2`");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rethrows readFile errors other than ENOENT", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "llama-swap-history-"));
+    try {
+      await expect(recordRun(dir, entry())).rejects.toThrow(/EISDIR/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

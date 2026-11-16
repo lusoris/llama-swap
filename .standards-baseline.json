@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generated_at": "2026-11-10T13:27:02Z",
+  "generated_at": "2026-11-16T20:06:33Z",
   "repository": "lusoris/llama-swap",
-  "commit_sha": "b0b38cd1432383364ab587751240ed4b69411e04",
-  "total_infractions": 208,
+  "commit_sha": "7d7ede8912072e0e46e4aa3d45de6da8c9bf321f",
+  "total_infractions": 201,
   "infractions": [
     {
       "rule_id": "HISS-07",
@@ -1714,66 +1714,6 @@
       "message": "Function 'cmdJudge' (75 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
       "anchor": "fn:cmdJudge",
       "fingerprint": "ui/src/cli/docsAgent.ts:HISS-04:fn:cmdJudge#1"
-    },
-    {
-      "rule_id": "HISS-04",
-      "file_path": "ui/src/cli/grade.ts",
-      "line_number": 49,
-      "symbol": "gradeRun",
-      "message": "Function 'gradeRun' (68 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
-      "anchor": "fn:gradeRun",
-      "fingerprint": "ui/src/cli/grade.ts:HISS-04:fn:gradeRun#1"
-    },
-    {
-      "rule_id": "HISS-04",
-      "file_path": "ui/src/cli/history.ts",
-      "line_number": 176,
-      "symbol": "renderNarrative",
-      "message": "Function 'renderNarrative' (79 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
-      "anchor": "fn:renderNarrative",
-      "fingerprint": "ui/src/cli/history.ts:HISS-04:fn:renderNarrative#1"
-    },
-    {
-      "rule_id": "HISS-07",
-      "file_path": "ui/src/cli/history.ts",
-      "line_number": 269,
-      "message": "Empty catch block swallows the error; handle, rethrow or wrap it",
-      "anchor": "fn:recordRun",
-      "fingerprint": "ui/src/cli/history.ts:HISS-07:fn:recordRun#1"
-    },
-    {
-      "rule_id": "HISS-04",
-      "file_path": "ui/src/cli/report.ts",
-      "line_number": 84,
-      "symbol": "formatFailureReport",
-      "message": "Function 'formatFailureReport' (69 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
-      "anchor": "fn:formatFailureReport",
-      "fingerprint": "ui/src/cli/report.ts:HISS-04:fn:formatFailureReport#1"
-    },
-    {
-      "rule_id": "HISS-04",
-      "file_path": "ui/src/components/ActivityTable.svelte",
-      "line_number": 340,
-      "symbol": "buildColumns",
-      "message": "Function 'buildColumns' (121 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
-      "anchor": "fn:buildColumns",
-      "fingerprint": "ui/src/components/ActivityTable.svelte:HISS-04:fn:buildColumns#1"
-    },
-    {
-      "rule_id": "HISS-07",
-      "file_path": "ui/src/components/CaptureDialog.svelte",
-      "line_number": 103,
-      "message": "Empty catch block swallows the error; handle, rethrow or wrap it",
-      "anchor": "fn:parseSSEChat",
-      "fingerprint": "ui/src/components/CaptureDialog.svelte:HISS-07:fn:parseSSEChat#1"
-    },
-    {
-      "rule_id": "HISS-07",
-      "file_path": "ui/src/components/playground/ChatInterface.svelte",
-      "line_number": 158,
-      "message": "Empty catch block swallows the error; handle, rethrow or wrap it",
-      "anchor": "fn:save",
-      "fingerprint": "ui/src/components/playground/ChatInterface.svelte:HISS-07:fn:save#1"
     },
     {
       "rule_id": "HISS-01",

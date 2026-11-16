@@ -46,35 +46,24 @@ function matches(pattern: string, text: string): boolean {
   return new RegExp(pattern, "i").test(text);
 }
 
-export function gradeRun(c: EvalCase, run: RunRecord): GradedRun {
+function gradeAnswerAssertions(c: EvalCase, answer: string): Assertion[] {
   const assertions: Assertion[] = [];
-  const called = new Set(run.toolCalls.map((t) => t.name));
-
-  // A turn that errored or was cut short did not answer the question, whatever
-  // the text happens to contain.
-  if (run.error) {
-    assertions.push({ kind: "no_error", detail: run.error, ok: false });
-  }
-  if (run.doneReason === "max_iterations") {
-    assertions.push({
-      kind: "completed",
-      detail: `hit the ${run.iterations}-iteration ceiling without answering`,
-      ok: false,
-    });
-  }
-
   for (const pattern of c.expectRegex) {
-    assertions.push({ kind: "expect_regex", detail: pattern, ok: matches(pattern, run.answer) });
+    assertions.push({ kind: "expect_regex", detail: pattern, ok: matches(pattern, answer) });
   }
-
   if (c.expectAny.length) {
-    const ok = c.expectAny.some((pattern) => matches(pattern, run.answer));
+    const ok = c.expectAny.some((pattern) => matches(pattern, answer));
     assertions.push({ kind: "expect_any", detail: c.expectAny.join(" | "), ok });
   }
-
   for (const pattern of c.forbidRegex) {
-    assertions.push({ kind: "forbid_regex", detail: pattern, ok: !matches(pattern, run.answer) });
+    assertions.push({ kind: "forbid_regex", detail: pattern, ok: !matches(pattern, answer) });
   }
+  return assertions;
+}
+
+function gradeToolAssertions(c: EvalCase, toolCalls: ToolInvocation[]): Assertion[] {
+  const assertions: Assertion[] = [];
+  const called = new Set(toolCalls.map((t) => t.name));
 
   for (const name of c.expectTools) {
     assertions.push({ kind: "expect_tool", detail: name, ok: called.has(name) });
@@ -100,9 +89,33 @@ export function gradeRun(c: EvalCase, run: RunRecord): GradedRun {
     assertions.push({
       kind: "require_tools",
       detail: "answered without calling any tool",
-      ok: run.toolCalls.length > 0,
+      ok: toolCalls.length > 0,
     });
   }
+
+  return assertions;
+}
+
+export function gradeRun(c: EvalCase, run: RunRecord): GradedRun {
+  const assertions: Assertion[] = [];
+
+  // A turn that errored or was cut short did not answer the question, whatever
+  // the text happens to contain.
+  if (run.error) {
+    assertions.push({ kind: "no_error", detail: run.error, ok: false });
+  }
+  if (run.doneReason === "max_iterations") {
+    assertions.push({
+      kind: "completed",
+      detail: `hit the ${run.iterations}-iteration ceiling without answering`,
+      ok: false,
+    });
+  }
+
+  assertions.push(
+    ...gradeAnswerAssertions(c, run.answer),
+    ...gradeToolAssertions(c, run.toolCalls),
+  );
 
   if (c.maxIterations !== undefined) {
     assertions.push({
