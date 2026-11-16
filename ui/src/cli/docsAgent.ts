@@ -425,6 +425,9 @@ async function selectEvalCases(
       );
   }
   if (only) {
+    // False positive: --only is the operator's own regex argument to this local
+    // eval CLI, so no untrusted input reaches the RegExp constructor.
+    // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp, javascript_dos_rule-non-literal-regexp, gitlab.eslint.detect-non-literal-regexp
     const pattern = new RegExp(only);
     cases = cases.filter((c) => pattern.test(c.id));
     if (!cases.length) die(`--only ${only} matched no cases`);
