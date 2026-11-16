@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generated_at": "2026-11-16T20:06:33Z",
+  "generated_at": "2026-11-16T22:04:54Z",
   "repository": "lusoris/llama-swap",
-  "commit_sha": "7d7ede8912072e0e46e4aa3d45de6da8c9bf321f",
-  "total_infractions": 201,
+  "commit_sha": "b3af591e85eb93ebcf03d12392b643d1d972ca85",
+  "total_infractions": 197,
   "infractions": [
     {
       "rule_id": "HISS-07",
@@ -1679,41 +1679,6 @@
       "message": "Direct recursion in walk; the call graph must form an acyclic DAG",
       "anchor": "fn:walk",
       "fingerprint": "ui/src/cli/cases.ts:HISS-01:fn:walk#1"
-    },
-    {
-      "rule_id": "HISS-07",
-      "file_path": "ui/src/cli/docsAgent.ts",
-      "line_number": 48,
-      "message": "process.exit ends the process from library code; return an error to the entry point instead",
-      "anchor": "fn:die",
-      "fingerprint": "ui/src/cli/docsAgent.ts:HISS-07:fn:die#1"
-    },
-    {
-      "rule_id": "HISS-04",
-      "file_path": "ui/src/cli/docsAgent.ts",
-      "line_number": 206,
-      "symbol": "runOnce",
-      "message": "Function 'runOnce' (88 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
-      "anchor": "fn:runOnce",
-      "fingerprint": "ui/src/cli/docsAgent.ts:HISS-04:fn:runOnce#1"
-    },
-    {
-      "rule_id": "HISS-04",
-      "file_path": "ui/src/cli/docsAgent.ts",
-      "line_number": 331,
-      "symbol": "cmdEval",
-      "message": "Function 'cmdEval' (162 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
-      "anchor": "fn:cmdEval",
-      "fingerprint": "ui/src/cli/docsAgent.ts:HISS-04:fn:cmdEval#1"
-    },
-    {
-      "rule_id": "HISS-04",
-      "file_path": "ui/src/cli/docsAgent.ts",
-      "line_number": 494,
-      "symbol": "cmdJudge",
-      "message": "Function 'cmdJudge' (75 LOC) exceeds HISS-04 / NASA Rule 4 limit of 60 LOC",
-      "anchor": "fn:cmdJudge",
-      "fingerprint": "ui/src/cli/docsAgent.ts:HISS-04:fn:cmdJudge#1"
     },
     {
       "rule_id": "HISS-01",

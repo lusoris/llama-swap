@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { describe, it, expect, vi } from "vitest";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -13,6 +13,15 @@ import {
   type HistoryRow,
   type HistoryEntry,
 } from "./history";
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    readFile: vi.fn(actual.readFile),
+    writeFile: vi.fn(actual.writeFile),
+  };
+});
 
 const summary = {
   cases: 39,
@@ -245,7 +254,13 @@ describe("recordRun", () => {
   it("rethrows readFile errors other than ENOENT", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "llama-swap-history-"));
     try {
-      await expect(recordRun(dir, entry())).rejects.toThrow(/EISDIR/);
+      const file = path.join(dir, "history.md");
+      vi.mocked(writeFile).mockClear();
+      vi.mocked(readFile).mockRejectedValueOnce(
+        Object.assign(new Error("EIO: i/o error, read"), { code: "EIO" }),
+      );
+      await expect(recordRun(file, entry())).rejects.toThrow(/EIO/);
+      expect(vi.mocked(writeFile)).not.toHaveBeenCalled();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
