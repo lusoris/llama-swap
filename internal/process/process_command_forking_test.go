@@ -4,6 +4,7 @@ package process
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -222,15 +223,11 @@ func TestProcessCommand_StopHonorsGracefulTimeout(t *testing.T) {
 	runErr := runAsync(t, p)
 
 	// Wait until the trap is installed before stopping.
-	trapDeadline := time.Now().Add(2 * time.Second)
-	for {
-		if _, err := os.Stat(ready); err == nil {
-			break
-		}
-		if time.Now().After(trapDeadline) {
-			t.Fatalf("script did not install SIGTERM trap in time")
-		}
-		time.Sleep(10 * time.Millisecond)
+	if !waitFor(2*time.Second, func() bool {
+		_, err := os.Stat(ready)
+		return err == nil
+	}) {
+		t.Fatalf("script did not install SIGTERM trap in time")
 	}
 
 	stopStart := time.Now()
@@ -291,19 +288,11 @@ func TestProcessCommand_StopReapsForkedGrandchild(t *testing.T) {
 
 	// Read the grandchild PID the wrapper recorded.
 	var childPID int
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		data, err := os.ReadFile(pidFile)
-		if err == nil {
-			if pid, perr := strconv.Atoi(strings.TrimSpace(string(data))); perr == nil && pid > 0 {
-				childPID = pid
-				break
-			}
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("wrapper did not record grandchild PID")
-		}
-		time.Sleep(10 * time.Millisecond)
+	if !waitFor(2*time.Second, func() bool {
+		childPID = readPIDFile(dir, filepath.Base(pidFile))
+		return childPID > 0
+	}) {
+		t.Fatalf("wrapper did not record grandchild PID")
 	}
 
 	if err := p.Stop(testStopTimeout); err != nil {
@@ -352,4 +341,93 @@ func killChildFromPidFile(pidFile string) {
 		return
 	}
 	_ = proc.Kill()
+}
+
+// TestProcessCommand_CmdStopDescendantReapedOnTimeout verifies that when CmdStop
+// backgrounds a long sleep child and itself hangs, it is bounded by UnloadTimeout
+// and its descendant is terminated when the stop timeout kills the stop process group.
+func TestProcessCommand_CmdStopDescendantReapedOnTimeout(t *testing.T) {
+	skipIfNoSimpleResponder(t)
+
+	port := getFreePort(t)
+	dir := t.TempDir()
+	pidFile := filepath.Join(dir, "descendant.pid")
+	t.Cleanup(func() { killChildFromPidFile(pidFile) })
+
+	logBuf := &syncBuffer{}
+	procLogger := logmon.NewWriter(logBuf)
+	proxyLogger := logmon.NewWriter(io.Discard)
+
+	p, err := New(context.Background(), t.Name(), config.ModelConfig{
+		Cmd:                fmt.Sprintf("%s -port %d -silent", simpleResponderPath, port),
+		CmdStop:            fmt.Sprintf("sh -c 'sleep 30 & echo $! > %s; exec sleep 30'", pidFile),
+		UnloadTimeout:      1,
+		Proxy:              fmt.Sprintf("http://127.0.0.1:%d", port),
+		CheckEndpoint:      "/health",
+		HealthCheckTimeout: 10,
+	}, procLogger, proxyLogger)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	_ = runAsync(t, p)
+
+	// Stop must trigger CmdStop which hangs until UnloadTimeout (1s) expires.
+	stopErr := p.Stop(testStopTimeout)
+	if stopErr != nil {
+		t.Logf("Stop returned error as expected for timed out CmdStop: %v", stopErr)
+	}
+
+	// Read the descendant PID from the pid file.
+	data, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatalf("ReadFile(%s): %v", pidFile, err)
+	}
+	descendantPID, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || descendantPID <= 0 {
+		t.Fatalf("invalid descendant PID %q: %v", string(data), err)
+	}
+
+	// Check with syscall.Kill(pid, 0) returning ESRCH, polling up to 2 s.
+	deadline := time.Now().Add(2 * time.Second)
+	gone := false
+	for time.Now().Before(deadline) {
+		err := syscall.Kill(descendantPID, 0)
+		if errors.Is(err, syscall.ESRCH) {
+			gone = true
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !gone {
+		t.Fatalf("descendant PID %d still alive after stop returned — process group was not killed", descendantPID)
+	}
+}
+
+// waitFor polls cond every 10ms until it returns true or timeout elapses.
+func waitFor(timeout time.Duration, cond func() bool) bool {
+	for deadline := time.Now().Add(timeout); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		if cond() {
+			return true
+		}
+	}
+	return cond()
+}
+
+// readPIDFile returns the positive PID stored in dir/name, or 0 when it is missing or malformed.
+// os.Root confines the read to dir.
+func readPIDFile(dir, name string) int {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return 0
+	}
+	data, err := root.ReadFile(name)
+	if closeErr := root.Close(); err != nil || closeErr != nil {
+		return 0
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || pid <= 0 {
+		return 0
+	}
+	return pid
 }

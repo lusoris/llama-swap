@@ -109,6 +109,8 @@ type ProcessCommand struct {
 	id        string
 	config    config.ModelConfig
 	parentCtx context.Context
+	// detachedCtx keeps parentCtx values without its cancel; killProcess owns teardown.
+	detachedCtx context.Context
 
 	processLogger *logmon.Monitor
 	proxyLogger   *logmon.Monitor
@@ -149,6 +151,7 @@ func New(
 		id:            id,
 		config:        conf,
 		parentCtx:     parentCtx,
+		detachedCtx:   context.WithoutCancel(parentCtx),
 		processLogger: processLogger,
 		proxyLogger:   proxyLogger,
 
@@ -360,7 +363,7 @@ func (l *lifecycle) onStart(req startReq) bool {
 	}
 	l.setState(StateStarting)
 
-	startCtx, cancelStart := context.WithCancel(context.Background())
+	startCtx, cancelStart := context.WithCancel(p.detachedCtx)
 	resultCh := make(chan startResult, 1)
 	go func() {
 		resultCh <- p.doStart(startCtx, req.timeout)
@@ -577,7 +580,7 @@ func (p *ProcessCommand) newProxyHandler(reverseProxy *httputil.ReverseProxy) ht
 // cmd.WaitDelay only acts as the inherited-pipe backstop measured from
 // process exit (see killProcess).
 func (p *ProcessCommand) newUpstreamCmd(args []string) (*exec.Cmd, context.CancelFunc) {
-	cmdCtx, cmdCancel := context.WithCancel(context.Background())
+	cmdCtx, cmdCancel := context.WithCancel(p.detachedCtx)
 	cmd := exec.CommandContext(cmdCtx, args[0], args[1:]...)
 	cmd.Stderr = p.processLogger
 	cmd.Stdout = p.processLogger
@@ -815,28 +818,7 @@ func (p *ProcessCommand) sendStopSignal(cmd *exec.Cmd) error {
 			strings.ReplaceAll(p.config.CmdStop, "${PID}", fmt.Sprintf("%d", pid)),
 		)
 		if err == nil {
-			p.processLogger.Debugf("<%s> sendStopSignal() running stop command: %s", p.id, strings.Join(stopArgs, " "))
-			stopCmd := exec.Command(stopArgs[0], stopArgs[1:]...)
-			stopCmd.Stderr = p.processLogger
-			stopCmd.Stdout = p.processLogger
-			// Bound the pipe copy so a CmdStop that backgrounds a child
-			// holding stdout/stderr cannot block Run() indefinitely.
-			stopCmd.WaitDelay = p.waitDelay
-			stopCmd.Env = cmd.Env
-			setProcAttributes(stopCmd)
-			runErr := stopCmd.Run()
-			// ErrWaitDelay is only returned when the stop command itself
-			// succeeded, so it is not a failure to stop the process.
-			if errors.Is(runErr, exec.ErrWaitDelay) {
-				p.processLogger.Warnf("<%s> sendStopSignal() stop command exited but a child held its output open; output may be truncated", p.id)
-				runErr = nil
-			}
-			if runErr != nil {
-				p.processLogger.Errorf("<%s> sendStopSignal() stop command failed: %v", p.id, runErr)
-			} else {
-				p.processLogger.Debugf("<%s> sendStopSignal() stop command completed for pid %d", p.id, pid)
-			}
-			return runErr
+			return p.runStopCommand(stopArgs, cmd.Env, pid)
 		}
 		// fall through to SIGTERM if sanitize failed
 		p.processLogger.Errorf("<%s> sendStopSignal() failed to sanitize CmdStop %q: %v, falling back to terminateProcessTree", p.id, p.config.CmdStop, err)
@@ -850,6 +832,40 @@ func (p *ProcessCommand) sendStopSignal(cmd *exec.Cmd) error {
 		p.processLogger.Errorf("<%s> sendStopSignal() terminateProcessTree failed for pid %d: %v", p.id, pid, termErr)
 	}
 	return termErr
+}
+
+// runStopCommand runs the sanitized CmdStop argv with UnloadTimeout (default 30s).
+// A timeout kills the stop command's whole process group.
+func (p *ProcessCommand) runStopCommand(stopArgs, env []string, pid int) error {
+	p.processLogger.Debugf("<%s> sendStopSignal() running stop command: %s", p.id, strings.Join(stopArgs, " "))
+	timeout := time.Duration(p.config.UnloadTimeout) * time.Second
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	stopCtx, cancel := context.WithTimeout(p.detachedCtx, timeout)
+	defer cancel()
+	stopCmd := exec.CommandContext(stopCtx, stopArgs[0], stopArgs[1:]...) // #nosec G204 -- cmdStop is operator YAML argv, PID int only, SanitizeCommand, no shell // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command, Semgrep_go_subproc_rule-subproc
+	stopCmd.Cancel = func() error { return killProcessTree(stopCmd) }
+	stopCmd.Stderr = p.processLogger
+	stopCmd.Stdout = p.processLogger
+	// Bound the pipe copy so a CmdStop that backgrounds a child
+	// holding stdout/stderr cannot block Run() indefinitely.
+	stopCmd.WaitDelay = p.waitDelay
+	stopCmd.Env = env
+	setProcAttributes(stopCmd)
+	runErr := stopCmd.Run()
+	// ErrWaitDelay is only returned when the stop command itself
+	// succeeded, so it is not a failure to stop the process.
+	if errors.Is(runErr, exec.ErrWaitDelay) {
+		p.processLogger.Warnf("<%s> sendStopSignal() stop command exited but a child held its output open; output may be truncated", p.id)
+		return nil
+	}
+	if runErr != nil {
+		p.processLogger.Errorf("<%s> sendStopSignal() stop command failed: %v", p.id, runErr)
+		return runErr
+	}
+	p.processLogger.Debugf("<%s> sendStopSignal() stop command completed for pid %d", p.id, pid)
+	return nil
 }
 
 // killProcess terminates the upstream process. The flow:
@@ -903,7 +919,9 @@ func (p *ProcessCommand) killProcess(cmd *exec.Cmd, cancel context.CancelFunc, c
 	if cmd != nil {
 		// SIGKILL the whole process group on Unix so any descendant that
 		// ignored or outlived the graceful signal is force-terminated too.
-		_ = killProcessTree(cmd)
+		if err := killProcessTree(cmd); err != nil {
+			p.proxyLogger.Warnf("<%s> killProcessTree failed: %v", p.id, err)
+		}
 	}
 	<-cmdDone
 }
