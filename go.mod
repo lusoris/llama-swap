@@ -17,7 +17,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/tailscale/tailcat v0.7.0
 	github.com/tidwall/gjson v1.20.4
-	github.com/tidwall/sjson v1.2.9
+	github.com/tidwall/sjson v1.2.10
 	github.com/yusufpapurcu/wmi v1.2.4
 	golang.org/x/sync v0.25.0
 	golang.org/x/sys v0.50.0
