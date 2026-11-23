@@ -19,7 +19,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@tsconfig/svelte": "^5.0.4",
     "@types/hast": "^3.0.4",
-    "@types/node": "^25.1.0",
+    "@types/node": "^26.0.0",
     "bits-ui": "^2.18.1",
     "clsx": "^2.1.1",
     "paneforge": "^1.0.2",
