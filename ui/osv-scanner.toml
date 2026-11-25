@@ -3,8 +3,3 @@
 # sits next to ui/package-lock.json.
 # Every entry is a dated exception: ignoreUntil is entry date plus the interval of its
 # category, and an expired entry no longer suppresses the finding.
-
-[[IgnoredVulns]]
-id = "GHSA-gcqx-w48m-w2h4"
-ignoreUntil = 2026-11-20
-reason = "Category C (10 days from 2026-11-10), renewal 1 (first entry 2026-10-31). deepmerge 4.3.1, prototype poisoning in mergeObject (low); reached only through @sveltejs/vite-plugin-svelte 7.3.1 (locked), a build-time devDependency of ui/ (ui/package-lock.json), never shipped to a browser. Re-checked 2026-11-10: deepmerge latest 4.3.1 (no patched release), vite-plugin-svelte latest 7.3.1 still requires deepmerge ^4.3.1. At 2026-11-20: patched deepmerge -> bump ui/package-lock.json and drop this entry; none -> renewal needs a recorded decision."
