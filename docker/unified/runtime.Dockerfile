@@ -43,7 +43,7 @@ RUN bash /build/install-llama-swap.sh "${LS_VERSION}"
 # vllm-wrapper is not shipped in the llama-swap release archives, so it is
 # compiled from the same revision as the llama-swap binary above.
 
-FROM golang:1.27-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea AS vllm-wrapper-build
+FROM golang:1.27-bookworm@sha256:ce59b41415e2524ae99926fe1f37ce48ba8c194dcbd2a56a65436cdcefa2bd34 AS vllm-wrapper-build
 ARG LS_VERSION=latest
 COPY lib-release.sh install-vllm-wrapper.sh /build/
 RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build \
@@ -56,7 +56,7 @@ RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build \
 # inference servers in a namespace; see cmd/kubeswap/README.md. Like
 # vllm-wrapper it is compiled from the same revision as llama-swap.
 
-FROM golang:1.27-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea AS kubeswap-build
+FROM golang:1.27-bookworm@sha256:ce59b41415e2524ae99926fe1f37ce48ba8c194dcbd2a56a65436cdcefa2bd34 AS kubeswap-build
 # Same LS_VERSION as the other Go stages, so one build arg (or the CI's
 # single resolved revision) controls llama-swap, vllm-wrapper and
 # kubeswap together. If that revision predates cmd/kubeswap (no release
